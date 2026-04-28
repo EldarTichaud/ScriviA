@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>ScriviA — Compte rendu diététique</title>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="icon" type="image/png" href="/icons/favicon-32.png"/>
+  <meta name="theme-color" content="#0B2D59"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="ScriviA"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:#F8FAFC;-webkit-font-smoothing:antialiased}
+    input,textarea,select{font-family:'DM Sans',sans-serif}
+    ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#F1F5F9}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px}
+    @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}.pulse{animation:pulse 1.5s ease-in-out infinite}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fadein{animation:fadeIn .2s ease forwards}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useMemo } = React;
+
+const S = { navy:"#0B2D59", teal:"#00A99D", bg:"#F8FAFC", white:"#FFFFFF", border:"#E2E8F0", text:"#1E293B", muted:"#64748B", light:"#F1F5F9" };
+
+const CAT = {
+  "Général":             { badge:"#EFF6FF", badgeTxt:"#1D4ED8", selBg:"#1D4ED8", emoji:"🩺" },
+  "Obésité":             { badge:"#FFFBEB", badgeTxt:"#92400E", selBg:"#B45309", emoji:"⚖️" },
+  "Diabète":             { badge:"#F5F3FF", badgeTxt:"#5B21B6", selBg:"#6D28D9", emoji:"🩸" },
+  "Insuffisance rénale": { badge:"#ECFEFF", badgeTxt:"#155E75", selBg:"#0E7490", emoji:"🫘" },
+  "Personnalisé":        { badge:"#F9FAFB", badgeTxt:"#374151", selBg:"#4B5563", emoji:"✏️" },
+};
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
+// Icône seule (header navbar — fond navy)
+const LogoIcon = ({size=32}) => (
+  <svg width={size} height={size} viewBox="181 48 92 92" xmlns="http://www.w3.org/2000/svg">
+    <rect x="181" y="48" width="92" height="92" rx="22" fill="#3A9E96"/>
+    <rect x="196" y="85" width="7" height="18" rx="3.5" fill="white" opacity="0.85"/>
+    <rect x="210" y="76" width="7" height="36" rx="3.5" fill="white"/>
+    <rect x="224" y="67" width="7" height="54" rx="3.5" fill="white"/>
+    <line x1="238" y1="63" x2="238" y2="125" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" opacity="0.45"/>
+    <rect x="245" y="80" width="22" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="87" width="17" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="94" width="22" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="101" width="14" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="108" width="19" height="3" rx="1.5" fill="white"/>
+  </svg>
+);
+// Logo complet (page d'accueil — fond blanc)
+const LogoFull = ({width="200"}) => (
+  <svg width={width} viewBox="181 48 380 120" xmlns="http://www.w3.org/2000/svg">
+    <rect x="181" y="48" width="92" height="92" rx="22" fill="#3A9E96"/>
+    <rect x="196" y="85" width="7" height="18" rx="3.5" fill="white" opacity="0.85"/>
+    <rect x="210" y="76" width="7" height="36" rx="3.5" fill="white"/>
+    <rect x="224" y="67" width="7" height="54" rx="3.5" fill="white"/>
+    <line x1="238" y1="63" x2="238" y2="125" stroke="white" strokeWidth="1.5" strokeDasharray="3,3" opacity="0.45"/>
+    <rect x="245" y="80" width="22" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="87" width="17" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="94" width="22" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="101" width="14" height="3" rx="1.5" fill="white"/>
+    <rect x="245" y="108" width="19" height="3" rx="1.5" fill="white"/>
+    <text x="293" y="113" fontFamily="'DM Serif Display', serif" fontSize="58" fontWeight="400" fill="#3A9E96" letterSpacing="1">ScriviA</text>
+  </svg>
+);
+
+const TEMPLATES = [
+  { id:"p-gen", name:"Première consultation", cat:"Général", custom:false, sections:["MOTIF DE CONSULTATION","ANAMNÈSE (antécédents médicaux, traitements en cours, contexte familial et professionnel, activité physique)","ÉVALUATION ALIMENTAIRE (habitudes alimentaires, rythme et structure des repas, appétit, goûts et aversions)","DONNÉES ANTHROPOMÉTRIQUES (poids, taille, IMC, évolution pondérale récente)","ÉVALUATION DES APPORTS NUTRITIONNELS","OBJECTIFS ET PLAN D'ACTION DIÉTÉTIQUE","CONSEILS ET ÉDUCATION NUTRITIONNELLE PRODIGUÉS","SUIVI ET ORIENTATION"] },
+  { id:"s-gen", name:"Consultation de suivi", cat:"Général", custom:false, sections:["BILAN DEPUIS LA DERNIÈRE CONSULTATION","ÉVOLUTION PONDÉRALE","OBSERVANCE DES CONSEILS PRÉCÉDENTS","BILAN ALIMENTAIRE ACTUEL","DIFFICULTÉS RENCONTRÉES","AJUSTEMENTS DU PLAN NUTRITIONNEL","NOUVEAUX CONSEILS","PROCHAINE CONSULTATION"] },
+  { id:"p-ob", name:"1ère consult. obésité", cat:"Obésité", custom:false, sections:["MOTIF DE CONSULTATION","ANAMNÈSE PONDÉRALE (historique du poids, âge de début, facteurs déclenchants, tentatives antérieures)","COMORBIDITÉS (HTA, dyslipidémie, SAOS, diabète de type 2, stéatose hépatique, etc.)","TRAITEMENTS EN COURS","ÉVALUATION COMPORTEMENTALE ALIMENTAIRE (grignotages, compulsions, hyperphagie, restriction cognitive)","ÉVALUATION ALIMENTAIRE DÉTAILLÉE","ACTIVITÉ PHYSIQUE ET SÉDENTARITÉ","DONNÉES ANTHROPOMÉTRIQUES (poids, taille, IMC, tour de taille, évolution pondérale)","RETENTISSEMENT PSYCHOLOGIQUE ET QUALITÉ DE VIE","PLAN DE SOINS NUTRITIONNEL ET OBJECTIFS","ORIENTATION PLURIDISCIPLINAIRE"] },
+  { id:"s-ob", name:"Suivi obésité", cat:"Obésité", custom:false, sections:["BILAN PONDÉRAL (poids actuel, évolution depuis dernière consultation, IMC)","BILAN COMPORTEMENTAL ALIMENTAIRE","ACTIVITÉ PHYSIQUE","OBSERVANCE DU PLAN ALIMENTAIRE","DIFFICULTÉS ET OBSTACLES RENCONTRÉS","RETENTISSEMENT PSYCHOLOGIQUE","AJUSTEMENT DU PLAN NUTRITIONNEL","OBJECTIFS POUR LA PROCHAINE CONSULTATION"] },
+  { id:"p-db", name:"1ère consult. diabète", cat:"Diabète", custom:false, sections:["MOTIF DE CONSULTATION","TYPE ET ANCIENNETÉ DU DIABÈTE","ANTÉCÉDENTS ET COMORBIDITÉS","TRAITEMENTS EN COURS (antidiabétiques oraux, insuline, autres)","AUTOSURVEILLANCE GLYCÉMIQUE","ÉVALUATION ALIMENTAIRE (glucides, répartition sur la journée, index glycémique)","ACTIVITÉ PHYSIQUE","DONNÉES ANTHROPOMÉTRIQUES","CONNAISSANCES ET REPRÉSENTATIONS DU PATIENT SUR SON DIABÈTE","OBJECTIFS GLYCÉMIQUES ET NUTRITIONNELS","ÉDUCATION THÉRAPEUTIQUE NUTRITIONNELLE","SUIVI PRÉVU"] },
+  { id:"s-db", name:"Suivi diabète", cat:"Diabète", custom:false, sections:["ÉQUILIBRE GLYCÉMIQUE (HbA1c si connue, glycémies récentes)","BILAN ALIMENTAIRE","GESTION DES GLUCIDES ET LECTURE D'ÉTIQUETTES","HYPOGLYCÉMIES / HYPERGLYCÉMIES SIGNALÉES","ACTIVITÉ PHYSIQUE","ÉVOLUTION PONDÉRALE","AJUSTEMENTS DU PLAN ALIMENTAIRE","RENFORCEMENT DE L'ÉDUCATION THÉRAPEUTIQUE","OBJECTIFS ET SUIVI"] },
+  { id:"p-irc", name:"1ère consult. IRC", cat:"Insuffisance rénale", custom:false, sections:["MOTIF DE CONSULTATION","STADE DE L'INSUFFISANCE RÉNALE CHRONIQUE (DFG, créatinine récente)","ÉTIOLOGIE ET ANTÉCÉDENTS","TRAITEMENTS EN COURS","BILAN BIOLOGIQUE RÉCENT (kaliémie, phosphatémie, albuminémie, bicarbonates, urée)","ÉVALUATION DE L'ÉTAT NUTRITIONNEL (appétit, nausées, dénutrition possible)","ÉVALUATION ALIMENTAIRE (apports en protéines, potassium, phosphore, sodium)","DONNÉES ANTHROPOMÉTRIQUES","RECOMMANDATIONS DIÉTÉTIQUES SPÉCIFIQUES À L'IRC","ÉDUCATION THÉRAPEUTIQUE (lecture d'étiquettes, aliments à limiter ou éviter)","SUIVI ET COORDINATION AVEC L'ÉQUIPE NÉPHRO"] },
+  { id:"s-irc", name:"Suivi IRC", cat:"Insuffisance rénale", custom:false, sections:["ÉVOLUTION DE LA FONCTION RÉNALE","BILAN BIOLOGIQUE RÉCENT","BILAN ALIMENTAIRE","OBSERVANCE DES RECOMMANDATIONS DIÉTÉTIQUES","DIFFICULTÉS RENCONTRÉES","AJUSTEMENTS DES APPORTS","RENFORCEMENT DE L'ÉDUCATION THÉRAPEUTIQUE","SUIVI PRÉVU"] },
+];
+
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+const RK="dietocr_records", TK="dietocr_custom_tpls", AK="gladia_key", CK="claude_key", FK="dietocr_folder_name", PK="dietocr_pii_redaction";
+const loadRecords=()=>{try{return JSON.parse(localStorage.getItem(RK)||"[]");}catch{return[];}};
+const saveRecords=r=>{try{localStorage.setItem(RK,JSON.stringify(r));}catch{}};
+const addRecord=rec=>{const r=loadRecords();r.unshift(rec);saveRecords(r);};
+
+// ─── FILE SYSTEM ACCESS API ───────────────────────────────────────────────────
+// dirHandle is stored in module-level variable (survives re-renders, lost on page close)
+let dirHandle = null;
+
+const fsApiSupported = () => typeof window.showDirectoryPicker === "function";
+
+async function pickFolder() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+    dirHandle = handle;
+    localStorage.setItem(FK, handle.name);
+    return handle.name;
+  } catch(e) {
+    if (e.name !== "AbortError") throw e;
+    return null;
+  }
+}
+
+async function saveDocToFolder(text, patient, dateIso) {
+  if (!dirHandle) return false;
+  try {
+    const ds = dateIso ? new Date(dateIso).toLocaleDateString("fr-FR").replace(/\//g,"-") : new Date().toLocaleDateString("fr-FR").replace(/\//g,"-");
+    const fname = (patient ? patient.replace(/\s+/g,"_") : "CR") + "_" + ds + ".doc";
+    const html = buildWordHtml(text, fname);
+    const blob = new Blob(["\ufeff", html], { type:"application/msword" });
+    const fileHandle = await dirHandle.getFileHandle(fname, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return fname;
+  } catch(e) {
+    console.error("Erreur écriture fichier:", e);
+    return false;
+  }
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const fmtTime=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+const fmtDate=iso=>new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+const fmtDateShort=iso=>new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"});
+
+const buildPrompt=(tpl,patient)=>{
+  const date=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+  return `Tu es un diététicien-nutritionniste rédigeant un compte rendu de consultation médicale destiné au dossier du patient.
+
+À partir de la transcription fournie (où "Locuteur A" désigne le professionnel de santé et "Locuteur B" désigne le patient), rédige un compte rendu professionnel, synthétique et structuré.
+
+Commence le document exactement ainsi :
+COMPTE RENDU DE CONSULTATION DIÉTÉTIQUE
+Type : ${tpl.name}
+Date : ${date}${patient?`\nPatient(e) : ${patient}`:""}
+
+Structure imposée :
+${tpl.sections.map((s,i)=>`\n${i+1}. ${s}`).join("")}
+
+Règles : synthétise et reformule de façon professionnelle, ne reproduis jamais le verbatim, vouvoiement sauf tutoiement explicite, "Non renseigné" si absent, inclus tous les chiffres cités, vocabulaire médical et diététique approprié, style sobre et factuel.
+ANONYMISATION : si des noms ou prénoms de patients, de proches, de médecins ou de tout tiers sont prononcés dans la transcription, les remplacer systématiquement par leurs initiales uniquement (ex : "Jean Dupont" → "J.D."). Ne jamais faire apparaître de nom complet dans le compte rendu.`;
+};
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+// ─── GLADIA API ───────────────────────────────────────────────────────────────
+async function uploadAudio(blob,key){
+  const fd=new FormData();fd.append("audio",blob,"audio.webm");
+  const r=await fetch("https://api.gladia.io/v2/upload",{method:"POST",headers:{"x-gladia-key":key},body:fd});
+  const d=await r.json();if(!d.audio_url)throw new Error("Upload Gladia échoué : "+JSON.stringify(d));return d.audio_url;
+}
+async function submitTranscription(url,key,piiRedaction=false){
+  // v6 : endpoint pre-recorded (l'ancien /v2/transcription est déprécié depuis 2025)
+  const body={
+    audio_url:url,
+    speech_model:"solaria-1",
+    diarization:true,
+    diarization_config:{min_speakers:1,max_speakers:2},
+    language_config:{languages:["fr"],code_switching:false},
+    // Vocabulaire médical et diététique pour améliorer la précision
+    custom_vocabulary:true,
+    custom_vocabulary_config:{
+      vocabulary:[
+        "IMC","IRC","HbA1c","DFG","kaliémie","phosphatémie","albuminémie",
+        "sarcopénie","dénutrition","dyslipidémie","stéatose hépatique","SAOS",
+        "bypass gastrique","sleeve gastrectomie","anneau gastrique",
+        "diurèse","créatinine","bicarbonates","urée","RCIU","albuminurie",
+        "hyperphagie","compulsion alimentaire","restriction cognitive",
+        "index glycémique","autosurveillance glycémique","glycémie",
+        "HTA","AOMI","NASH","SOPK","hypothyroïdie","insulinorésistance",
+        "diététicien","nutritionniste","diétothérapie","protéinurie"
+      ],
+      default_intensity:0.6
+    },
+    punctuation_enhanced:true,
+  };
+  if(piiRedaction){
+    body.pii_redaction=true;
+    body.pii_redaction_config={
+      entity_types:["NAME","PHONE_NUMBER","EMAIL_ADDRESS"],
+      processed_text_type:"MARKER"
+    };
+  }
+  const r=await fetch("https://api.gladia.io/v2/pre-recorded",{method:"POST",headers:{"x-gladia-key":key,"content-type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json();if(!d.id)throw new Error("Transcription Gladia échouée : "+JSON.stringify(d));return {id:d.id,result_url:d.result_url};
+}
+function pollTranscript(id,result_url,key){
+  return new Promise((res,rej)=>{const go=async()=>{try{const r=await fetch(result_url,{headers:{"x-gladia-key":key}});const d=await r.json();if(d.status==="done")res(d);else if(d.status==="error")rej(new Error(d.result?.error||"Erreur Gladia"));else setTimeout(go,3500);}catch(e){rej(e);}};go();});
+}
+// Normalize Gladia utterances → structured array with timestamps + confidence
+function formatTranscriptStructured(data){
+  const utterances=data.result?.transcription?.utterances;
+  const fullText=data.result?.transcription?.full_transcript||"";
+  if(!utterances||!utterances.length){
+    return [{speaker:"A",text:fullText,startMs:0,endMs:0,avgConfidence:null,words:[]}];
+  }
+  const speakerMap={};let idx=0;
+  const letters=["A","B","C","D","E"];
+  return utterances.map(u=>{
+    const spk=u.speaker;
+    if(!(spk in speakerMap))speakerMap[spk]=letters[idx++]||String(spk);
+    const words=(u.words||[]).map(w=>({
+      text:w.word||w.text||"",
+      startMs:Math.round((w.start||0)*1000),
+      endMs:Math.round((w.end||0)*1000),
+      confidence:w.confidence??null
+    }));
+    const confs=words.filter(w=>w.confidence!==null).map(w=>w.confidence);
+    const avgConfidence=confs.length?confs.reduce((a,b)=>a+b,0)/confs.length:null;
+    // If utterance text is empty, rebuild from words
+    const text=u.text||u.transcript||(words.map(w=>w.text).join(" ").trim())||"";
+    return {
+      speaker:speakerMap[spk],
+      text,
+      startMs:Math.round((u.start||0)*1000),
+      endMs:Math.round((u.end||0)*1000),
+      avgConfidence,
+      words
+    };
+  }).filter(u=>u.text.trim());
+}
+// Plain text for Claude prompt — fallback to full_transcript if all utterances empty
+function utterancesToPlain(utterances,rawText){
+  const plain=utterances.map(u=>`Locuteur ${u.speaker} : ${u.text}`).join("\n");
+  return plain.trim()||rawText||"";
+}
+// ms → MM:SS
+const fmtMs=ms=>{const s=Math.floor((ms||0)/1000);return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;};
+// Acoustic reliability per utterance
+function analyzeAcousticReliability(utterances){
+  return utterances.map(u=>{
+    if(u.avgConfidence===null)return "grey";
+    if(u.avgConfidence>=0.85)return "green";
+    if(u.avgConfidence>=0.65)return "orange";
+    return "red";
+  });
+}
+// Textual reliability via Claude
+async function analyzeTextualReliability(utterances,claudeKey){
+  const tx=utterances.map((u,i)=>`[${i}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`Tu es expert en transcription médicale. Analyse cette transcription de consultation diététique. Identifie les passages textuellement incohérents ou suspects.\nRéponds UNIQUEMENT en JSON valide, format exact : {"flags":[{"index":N,"level":"warning"|"error","reason":"explication courte en français"}]}\n- "error" : valeur médicale impossible (glycémie 0.4, IMC 85...), terme médical clairement déformé, phrase brisée\n- "warning" : valeur atypique, attribution de locuteur suspecte, terme ambigu\nSi aucune incohérence : {"flags":[]}`,messages:[{role:"user",content:`Transcription :\n${tx}`}]})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);
+  try{const clean=d.content[0].text.replace(/```json|```/g,"").trim();return JSON.parse(clean).flags||[];}catch{return [];}
+}
+// Export transcript as Markdown
+function exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplName,date){
+  const ds=new Date(date).toLocaleDateString("fr-FR");
+  const flagMap={};(textualFlags||[]).forEach(f=>flagMap[f.index]=f);
+  let md=`# Transcription — ${patient||"Patient anonyme"}\n**Type :** ${tplName}  \n**Date :** ${ds}  \n\n---\n\n`;
+  utterances.forEach((u,i)=>{
+    const acFlag=acousticFlags?acousticFlags[i]:null;
+    const txFlag=flagMap[i];
+    const badge=txFlag?.level==="error"?"🔴":txFlag?.level==="warning"?"🟠":acFlag==="red"?"🔴":acFlag==="orange"?"🟠":acFlag==="green"?"🟢":"";
+    md+=`**[${fmtMs(u.startMs)}] Locuteur ${u.speaker}** ${badge}  \n${u.text}  \n`;
+    if(txFlag)md+=`> ⚠️ *${txFlag.reason}*  \n`;
+    if(acFlag&&acFlag!=="green"&&u.avgConfidence!==null)md+=`> 📊 *Fiabilité acoustique : ${Math.round(u.avgConfidence*100)}%*  \n`;
+    md+="\n";
+  });
+  const errors=(textualFlags||[]).filter(f=>f.level==="error").length;
+  const warnings=(textualFlags||[]).filter(f=>f.level==="warning").length;
+  const lowAc=(acousticFlags||[]).filter(f=>f==="red"||f==="orange").length;
+  md+=`---\n\n## Résumé\n- 🔴 Erreurs textuelles : ${errors}\n- 🟠 Avertissements : ${warnings}\n- 📊 Passages acoustiquement faibles : ${lowAc}\n`;
+  const blob=new Blob([md],{type:"text/markdown"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=(patient?patient.replace(/\s+/g,"_"):"CR")+"_transcription_"+ds.replace(/\//g,"-")+".md";a.click();
+}
+// ─── RELECTURE IA ─────────────────────────────────────────────────────────────
+async function reviewCR(cr,utterances,claudeKey){
+  const tx=utterances.map(u=>`[${fmtMs(u.startMs)}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
+
+Identifie précisément :
+1. Les OMISSIONS : informations importantes dites dans la consultation mais absentes du CR
+2. Les CONTRADICTIONS : le CR affirme quelque chose de différent de ce qui est dit
+3. Les REFORMULATIONS suggérées : passages du CR à améliorer pour plus de précision
+
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans preamble :
+{
+  "omissions": [{"timestamp":"MM:SS","transcrit":"ce qui a été dit","impact":"haut|moyen|bas"}],
+  "contradictions": [{"dans_cr":"formulation du CR","dans_transcript":"ce qui a vraiment été dit"}],
+  "suggestions": [{"original":"passage du CR","ameliore":"version améliorée","raison":"explication courte"}],
+  "points_confirmes": N,
+  "avis_global": "phrase courte d'appréciation globale"
+}
+Si catégorie vide : tableau vide []. Sois rigoureux mais non sur-interprétatif : une synthèse professionnelle n'est pas une omission.`,messages:[{role:"user",content:`TRANSCRIPTION ORIGINALE :\n${tx}\n\n---\n\nCOMPTE RENDU GÉNÉRÉ :\n${cr}`}]})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);
+  try{const clean=d.content[0].text.replace(/```json|```/g,"").trim();return JSON.parse(clean);}
+  catch{throw new Error("Réponse malformée de Claude");}
+}
+
+async function generateCR(transcript,tpl,patient,claudeKey){
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,system:buildPrompt(tpl,patient),messages:[{role:"user",content:`Transcription :\n\n${transcript}\n\nRédige le compte rendu structuré.`}]})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function toHtml(text){
+  return text.split("\n").map(raw=>{
+    if(!raw.trim())return "<br/>";
+    let l=raw.replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>");
+    if(l.match(/^\d+\.\s+[A-ZÀ-Ùa-zà-ù]/))return `<h2>${l}</h2>`;
+    return `<p>${l}</p>`;
+  }).join("");
+}
+
+function buildWordHtml(text, fname) {
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${fname}</title><style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;margin:2.5cm 2cm;color:#1a1a1a}h2{font-size:11pt;font-weight:bold;color:#0B2D59;margin-top:14pt;margin-bottom:3pt;text-transform:uppercase;border-bottom:1px solid #E2E8F0;padding-bottom:2pt}p{margin:3pt 0;line-height:1.5}strong{font-weight:600}</style></head><body>${toHtml(text)}</body></html>`;
+}
+
+function downloadWord(text, patient, dateIso) {
+  const ds = dateIso ? new Date(dateIso).toLocaleDateString("fr-FR").replace(/\//g,"-") : new Date().toLocaleDateString("fr-FR").replace(/\//g,"-");
+  const fn = (patient?patient.replace(/\s+/g,"_"):"CR")+"_"+ds+".doc";
+  const blob = new Blob(["\ufeff", buildWordHtml(text, fn)], {type:"application/msword"});
+  const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fn; a.click();
+}
+
+function exportPDF(text) {
+  const w=window.open("","_blank");if(!w){alert("Autorisez les popups");return;}
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&display=swap" rel="stylesheet"><style>@page{margin:2.5cm 2cm}body{font-family:'DM Sans',Arial,sans-serif;font-size:10.5pt;color:#1a1a1a}h2{font-size:10.5pt;font-weight:700;color:#0B2D59;margin-top:14pt;text-transform:uppercase;border-bottom:1px solid #CBD5E1;padding-bottom:2pt}p{margin:3pt 0;line-height:1.55}</style></head><body>${toHtml(text)}<script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+  w.document.close();
+}
+
+// ─── JSON BACKUP ──────────────────────────────────────────────────────────────
+function exportJSON(customTpls) {
+  const data = {
+    version: 1,
+    exportDate: new Date().toISOString(),
+    records: loadRecords(),
+    customTemplates: customTpls.filter(t=>t.custom),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ScriviA_sauvegarde_"+new Date().toLocaleDateString("fr-FR").replace(/\//g,"-")+".json";
+  a.click();
+}
+
+function importJSON(file, onSuccess) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.version || !Array.isArray(data.records)) throw new Error("Format invalide");
+      const existing = loadRecords();
+      const existingIds = new Set(existing.map(r=>r.id));
+      const newRecs = data.records.filter(r=>!existingIds.has(r.id));
+      saveRecords([...newRecs, ...existing]);
+      onSuccess(data.customTemplates||[], newRecs.length, data.records.length - newRecs.length);
+    } catch(err) {
+      alert("Erreur d'import : "+err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─── SHARED UI ────────────────────────────────────────────────────────────────
+function Header({title,sub,onBack,right}){
+  return <div style={{background:S.navy,display:"flex",alignItems:"center",gap:12,padding:"14px 18px",flexShrink:0}}>
+    {onBack&&<button onClick={onBack} style={{width:34,height:34,borderRadius:10,border:"none",background:"rgba(255,255,255,0.12)",color:"#fff",cursor:"pointer",fontSize:22,lineHeight:1,flexShrink:0}}>‹</button>}
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+        <LogoIcon size={28}/>
+        <span style={{fontSize:13,fontWeight:700,letterSpacing:1,color:"#fff",fontFamily:"'DM Serif Display',serif"}}>ScriviA</span>
+      </div>
+      <div style={{fontWeight:700,fontSize:18,lineHeight:1.2,color:"#fff",fontFamily:"'DM Serif Display',serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}</div>
+      {sub&&<div style={{fontSize:12,color:"rgba(255,255,255,0.55)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub}</div>}
+    </div>
+    {right&&<div style={{flexShrink:0}}>{right}</div>}
+  </div>;
+}
+function Card({children,style={},onClick}){
+  return <div onClick={onClick} style={{background:S.white,border:`1.5px solid ${S.border}`,borderRadius:18,padding:16,cursor:onClick?"pointer":"default",...style}}>{children}</div>;
+}
+function FInput({value,onChange,placeholder,type="text",rows,style={}}){
+  const [f,setF]=useState(false);
+  const base={width:"100%",border:`1.5px solid ${f?S.teal:S.border}`,borderRadius:12,padding:"10px 12px",fontSize:14,color:S.text,background:S.white,outline:"none",...style};
+  return rows
+    ?<textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows} style={{...base,resize:"vertical"}} onFocus={()=>setF(true)} onBlur={()=>setF(false)}/>
+    :<input type={type} value={value} onChange={onChange} placeholder={placeholder} style={base} onFocus={()=>setF(true)} onBlur={()=>setF(false)}/>;
+}
+function Badge({cat}){
+  const c=CAT[cat]||CAT["Personnalisé"];
+  return <span style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:999,background:c.badge,color:c.badgeTxt,whiteSpace:"nowrap"}}>{cat}</span>;
+}
+function TplCard({t,selected,onSelect}){
+  const c=CAT[t.cat]||CAT["Personnalisé"];
+  return <button onClick={onSelect} style={{padding:"12px 14px",borderRadius:14,textAlign:"left",width:"100%",cursor:"pointer",border:`2px solid ${selected?c.selBg:S.border}`,background:selected?c.selBg:S.white,color:selected?"#fff":S.text}}>
+    <div style={{fontSize:13,fontWeight:600,lineHeight:1.3}}>{t.name}</div>
+    <div style={{fontSize:11,marginTop:3,color:selected?"rgba(255,255,255,0.65)":S.muted}}>{t.sections.length} sections</div>
+  </button>;
+}
+
+// ─── FOLDER BANNER ────────────────────────────────────────────────────────────
+function FolderBanner({folderName,onPick}){
+  const supported = fsApiSupported();
+  if (!supported) return (
+    <div style={{borderRadius:16,padding:"12px 16px",background:"#FEF3C7",border:"1.5px solid #FCD34D",marginTop:8}}>
+      <div style={{fontSize:13,fontWeight:600,color:"#92400E"}}>⚠️ Sauvegarde automatique non disponible</div>
+      <div style={{fontSize:11,color:S.muted,marginTop:2}}>Requiert Chrome ou Edge. Les exports manuels restent disponibles.</div>
+    </div>
+  );
+  return (
+    <div style={{borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginTop:8,background:folderName?"#F0FDF4":"#F8FAFC",border:`1.5px solid ${folderName?"#86EFAC":S.border}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+        <span style={{fontSize:20,flexShrink:0}}>{folderName?"📁":"📂"}</span>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:folderName?"#15803D":S.text}}>
+            {folderName ? <>Dossier : <span style={{fontFamily:"monospace"}}>{folderName}</span></> : "Aucun dossier de sauvegarde"}
+          </div>
+          <div style={{fontSize:11,color:S.muted}}>{folderName?"Les .doc seront enregistrés automatiquement":"Choisissez un dossier pour l'enregistrement auto"}</div>
+        </div>
+      </div>
+      <button onClick={onPick} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:8,border:"none",background:folderName?"#DCFCE7":"#EFF6FF",color:folderName?"#15803D":"#1D4ED8",cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+        {folderName?"Changer":"Choisir"}
+      </button>
+    </div>
+  );
+}
+
+// ─── HOME ─────────────────────────────────────────────────────────────────────
+function HomePage({allTpls,tpl,setTpl,patient,setPatient,apiKey,setApiKey,claudeKey,setClaudeKey,folderName,onPickFolder,onStart,onTpls,onHistory,onSettings}){
+  const [showKey,setShowKey]=useState(false);
+  const [showCK,setShowCK]=useState(false);
+  const cats=[...new Set(allTpls.map(t=>t.cat))];
+  const canStart=tpl&&apiKey&&claudeKey;
+  const nb=loadRecords().length;
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Nouvelle consultation" right={
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={onHistory} style={{display:"flex",alignItems:"center",gap:5,padding:"7px 12px",borderRadius:12,border:"none",background:"rgba(255,255,255,0.14)",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+          📋 {nb>0&&<span style={{background:S.teal,borderRadius:999,padding:"1px 7px",fontSize:11,fontWeight:700}}>{nb}</span>}
+        </button>
+        <button onClick={onSettings} style={{padding:"7px 10px",borderRadius:12,border:"none",background:"rgba(255,255,255,0.14)",color:"#fff",fontSize:16,cursor:"pointer"}} title="Paramètres">⚙️</button>
+      </div>}/>
+    <div style={{flex:1,overflowY:"auto",padding:"16px 16px 48px",maxWidth:560,margin:"0 auto",width:"100%"}}>
+
+      {/* LOGO ACCUEIL */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0 8px"}}>
+        <LogoFull width="220"/>
+        <p style={{fontSize:12,color:S.muted,letterSpacing:1.5,marginTop:2}}>Parlez. Relisez. Sauvegardez.</p>
+      </div>
+
+      {/* FOLDER BANNER */}
+      <FolderBanner folderName={folderName} onPick={onPickFolder}/>
+
+      {/* API KEY */}
+      <div style={{borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginTop:10,background:apiKey?"#F0FDF4":"#FFFBEB",border:`1.5px solid ${apiKey?"#86EFAC":"#FCD34D"}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{width:9,height:9,borderRadius:"50%",background:apiKey?"#22C55E":"#F59E0B",flexShrink:0}}/>
+          <div><div style={{fontSize:13,fontWeight:600,color:apiKey?"#15803D":"#92400E"}}>{apiKey?"Gladia configuré":"Clé API Gladia requise"}</div><div style={{fontSize:11,color:S.muted}}>Plan gratuit 10h/mois · gladia.io</div></div>
+        </div>
+        <button onClick={()=>setShowKey(!showKey)} style={{fontSize:11,fontWeight:700,padding:"5px 11px",borderRadius:8,border:"none",background:apiKey?"#DCFCE7":"#FEF3C7",color:apiKey?"#15803D":"#92400E",cursor:"pointer",flexShrink:0}}>{apiKey?"Modifier":"Configurer"}</button>
+      </div>
+      {showKey&&<Card style={{marginTop:10}}>
+        <div style={{fontSize:13,fontWeight:600,color:S.text,marginBottom:8}}>Clé API Gladia</div>
+        <FInput type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="Votre clé Gladia…"/>
+        <p style={{fontSize:11,color:S.muted,marginTop:5}}>Stockée localement dans votre navigateur</p>
+        <button onClick={()=>setShowKey(false)} style={{marginTop:10,width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Enregistrer</button>
+      </Card>}
+
+      {/* CLAUDE API KEY */}
+      <div style={{borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginTop:10,background:claudeKey?"#F0FDF4":"#FFFBEB",border:`1.5px solid ${claudeKey?"#86EFAC":"#FCD34D"}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{width:9,height:9,borderRadius:"50%",background:claudeKey?"#22C55E":"#F59E0B",flexShrink:0}}/>
+          <div><div style={{fontSize:13,fontWeight:600,color:claudeKey?"#15803D":"#92400E"}}>{claudeKey?"Clé Claude configurée":"Clé API Claude (Anthropic) requise"}</div><div style={{fontSize:11,color:S.muted}}>console.anthropic.com → API Keys</div></div>
+        </div>
+        <button onClick={()=>setShowCK(!showCK)} style={{fontSize:11,fontWeight:700,padding:"5px 11px",borderRadius:8,border:"none",background:claudeKey?"#DCFCE7":"#FEF3C7",color:claudeKey?"#15803D":"#92400E",cursor:"pointer",flexShrink:0}}>{claudeKey?"Modifier":"Configurer"}</button>
+      </div>
+      {showCK&&<Card style={{marginTop:10}}>
+        <div style={{fontSize:13,fontWeight:600,color:S.text,marginBottom:8}}>Clé API Anthropic (Claude)</div>
+        <FInput type="password" value={claudeKey} onChange={e=>setClaudeKey(e.target.value)} placeholder="sk-ant-…"/>
+        <p style={{fontSize:11,color:S.muted,marginTop:5}}>Stockée localement · console.anthropic.com</p>
+        <button onClick={()=>setShowCK(false)} style={{marginTop:10,width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Enregistrer</button>
+      </Card>}
+
+      {/* PATIENT */}
+      <Card style={{marginTop:10}}>
+        <div style={{fontSize:13,fontWeight:600,color:S.text,marginBottom:8}}>Patient(e) <span style={{fontWeight:400,color:S.muted}}>(optionnel)</span></div>
+        <FInput value={patient} onChange={e=>setPatient(e.target.value)} placeholder="Nom Prénom"/>
+      </Card>
+
+      {/* TEMPLATES */}
+      <div style={{marginTop:18}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:17,color:S.text,fontFamily:"'DM Serif Display',serif"}}>Type de consultation</div>
+          <button onClick={onTpls} style={{fontSize:12,fontWeight:600,color:S.teal,background:"none",border:"none",cursor:"pointer"}}>✏️ Trames</button>
+        </div>
+        {cats.map(cat=>{
+          const c=CAT[cat]||CAT["Personnalisé"];
+          return <div key={cat} style={{marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}><span style={{fontSize:15}}>{c.emoji}</span><span style={{fontSize:13,fontWeight:600,color:S.muted}}>{cat}</span></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>{allTpls.filter(t=>t.cat===cat).map(t=><TplCard key={t.id} t={t} selected={tpl&&tpl.id===t.id} onSelect={()=>setTpl(t)}/>)}</div>
+          </div>;
+        })}
+      </div>
+
+      <button onClick={onStart} disabled={!canStart} style={{width:"100%",padding:"15px 0",borderRadius:18,border:"none",background:canStart?S.navy:S.light,color:canStart?"#fff":S.muted,fontWeight:700,fontSize:16,cursor:canStart?"pointer":"not-allowed",marginTop:4}}>🎙️ Démarrer la consultation</button>
+      {!tpl&&<p style={{textAlign:"center",fontSize:13,color:S.muted,marginTop:7}}>Sélectionnez un type de consultation</p>}
+      {tpl&&!apiKey&&<p style={{textAlign:"center",fontSize:13,color:"#D97706",marginTop:7}}>⚠️ Configurez votre clé Gladia</p>}
+      {tpl&&apiKey&&!claudeKey&&<p style={{textAlign:"center",fontSize:13,color:"#D97706",marginTop:7}}>⚠️ Configurez votre clé Claude (Anthropic)</p>}
+    </div>
+  </div>;
+}
+
+// ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
+function SettingsPage({allTpls,folderName,onPickFolder,onBack,onImport,piiRedaction,onTogglePii}){
+  const [importMsg,setImportMsg]=useState(null);
+  const fileRef=useRef(null);
+
+  const handleImport=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    importJSON(file,(customTpls,added,skipped)=>{
+      setImportMsg(`✅ Import réussi : ${added} CR ajoutés, ${skipped} déjà présents.`);
+      onImport(customTpls);
+    });
+    e.target.value="";
+  };
+
+  const records=loadRecords();
+
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Paramètres" onBack={onBack}/>
+    <div style={{flex:1,overflowY:"auto",padding:"16px 16px 48px",maxWidth:560,margin:"0 auto",width:"100%"}}>
+
+      {/* FOLDER */}
+      <div style={{fontWeight:700,fontSize:15,color:S.text,fontFamily:"'DM Serif Display',serif",marginBottom:10,marginTop:4}}>Dossier de sauvegarde automatique</div>
+      <FolderBanner folderName={folderName} onPick={onPickFolder}/>
+      <p style={{fontSize:11,color:S.muted,marginTop:8,lineHeight:1.6}}>
+        La permission d'accès au dossier est active tant que cette fenêtre reste ouverte. À chaque réouverture du fichier HTML, cliquez sur <strong>Choisir</strong> pour la réactiver (le nom du dossier est mémorisé pour vous guider).
+      </p>
+
+      {/* EXPORT JSON */}
+      <div style={{fontWeight:700,fontSize:15,color:S.text,fontFamily:"'DM Serif Display',serif",marginBottom:10,marginTop:24}}>Sauvegarde & restauration</div>
+      <Card style={{marginBottom:10}}>
+        <div style={{fontSize:14,fontWeight:600,color:S.text,marginBottom:4}}>Exporter toute la base</div>
+        <div style={{fontSize:12,color:S.muted,marginBottom:12}}>{records.length} CR et {allTpls.filter(t=>t.custom).length} trames personnalisées seront exportés dans un fichier JSON.</div>
+        <button onClick={()=>exportJSON(allTpls)} style={{width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          📦 Exporter ScriviA_sauvegarde.json
+        </button>
+      </Card>
+      <Card>
+        <div style={{fontSize:14,fontWeight:600,color:S.text,marginBottom:4}}>Importer une sauvegarde</div>
+        <div style={{fontSize:12,color:S.muted,marginBottom:12}}>Les CR importés sont fusionnés avec les données existantes (les doublons sont ignorés). Les trames personnalisées sont aussi restaurées.</div>
+        <button onClick={()=>fileRef.current.click()} style={{width:"100%",padding:"12px 0",borderRadius:14,border:`2px dashed ${S.teal}`,background:"transparent",color:S.teal,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          📂 Choisir un fichier .json à importer
+        </button>
+        <input ref={fileRef} type="file" accept=".json" onChange={handleImport} style={{display:"none"}}/>
+        {importMsg&&<div style={{marginTop:10,padding:"10px 14px",borderRadius:12,background:"#F0FDF4",border:"1px solid #86EFAC",fontSize:13,color:"#15803D",fontWeight:500}}>{importMsg}</div>}
+      </Card>
+
+      {/* PII REDACTION */}
+      <div style={{fontWeight:700,fontSize:15,color:S.text,fontFamily:"'DM Serif Display',serif",marginBottom:10,marginTop:24}}>Anonymisation Gladia (PII)</div>
+      <Card style={{marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:600,color:S.text,marginBottom:2}}>Masquage automatique des données personnelles</div>
+            <div style={{fontSize:12,color:S.muted,lineHeight:1.5}}>Gladia détecte et remplace noms, téléphones et emails dans la transcription avant transmission à Claude. Recommandé pour les libéraux (RGPD). <strong>N'apporte pas la conformité HDS.</strong></div>
+          </div>
+          <button onClick={()=>onTogglePii(!piiRedaction)} style={{flexShrink:0,width:48,height:26,borderRadius:999,border:"none",background:piiRedaction?S.teal:"#CBD5E1",cursor:"pointer",position:"relative",transition:"background .2s"}}>
+            <span style={{position:"absolute",top:3,left:piiRedaction?24:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+          </button>
+        </div>
+        <div style={{marginTop:10,fontSize:11,padding:"7px 12px",borderRadius:10,background:piiRedaction?"#F0FDF4":"#F8FAFC",border:`1px solid ${piiRedaction?"#86EFAC":S.border}`,color:piiRedaction?"#15803D":S.muted,fontWeight:600}}>
+          {piiRedaction?"✅ Actif — les données personnelles seront masquées par Gladia":"⭕ Inactif — l'anonymisation reste assurée par Claude (initiales)"}
+        </div>
+      </Card>
+
+      {/* DANGER ZONE */}
+      <div style={{fontWeight:700,fontSize:15,color:"#991B1B",fontFamily:"'DM Serif Display',serif",marginBottom:10,marginTop:24}}>Zone de danger</div>
+      <Card style={{border:"1.5px solid #FECACA"}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#991B1B",marginBottom:4}}>Effacer toutes les données</div>
+        <div style={{fontSize:12,color:S.muted,marginBottom:12}}>Supprime définitivement tous les CR, tous les dossiers patients et toutes les trames personnalisées du navigateur. <strong>Irréversible.</strong> Faites une sauvegarde JSON avant.</div>
+        <button onClick={()=>{
+          if(window.confirm("Effacer TOUTES les données ScriviA ? Cette action est irréversible.")){
+            localStorage.removeItem(RK);localStorage.removeItem(TK);
+            window.location.reload();
+          }
+        }} style={{width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:"#FEF2F2",color:"#DC2626",fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          🗑 Tout effacer
+        </button>
+      </Card>
+    </div>
+  </div>;
+}
+
+// ─── RECORDING ────────────────────────────────────────────────────────────────
+function RecPage({tpl,patient,recording,recTime,audioLv,audioBlob,onStart,onStop,onProcess,onBack}){
+  const [bars,setBars]=useState(Array(28).fill(6));
+  useEffect(()=>{
+    if(!recording){setBars(Array(28).fill(6));return;}
+    const id=setInterval(()=>setBars(prev=>prev.map((_,i)=>{const base=Math.max(0,1-Math.abs(i-13.5)/14);return Math.max(4,base*audioLv*0.85+Math.random()*10+5);})),80);
+    return()=>clearInterval(id);
+  },[recording,audioLv]);
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Enregistrement" onBack={onBack} sub={tpl?.name+(patient?" — "+patient:"")}/>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px",gap:26}}>
+      <Card style={{maxWidth:320,width:"100%",textAlign:"center"}}>
+        <div style={{fontWeight:700,color:S.navy,fontFamily:"'DM Serif Display',serif",fontSize:16}}>{tpl?.name}</div>
+        {patient&&<div style={{fontSize:13,color:S.muted,marginTop:3}}>{patient}</div>}
+      </Card>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:68,fontWeight:700,lineHeight:1,fontFamily:"monospace",color:recording?S.navy:audioBlob?"#16A34A":"#CBD5E1"}}>{fmtTime(recTime)}</div>
+        <div style={{fontSize:12,color:S.muted,marginTop:3}}>max 30:00</div>
+        <div style={{width:180,height:4,borderRadius:999,background:S.light,overflow:"hidden",margin:"9px auto 0"}}>
+          <div style={{height:"100%",borderRadius:999,width:`${Math.min(100,(recTime/1800)*100)}%`,background:recording?S.teal:audioBlob?"#22C55E":S.light,transition:"width 1s linear"}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:3,height:72}}>
+        {bars.map((h,i)=><div key={i} style={{width:6,height:Math.max(4,Math.min(68,h)),borderRadius:999,background:recording?S.teal:audioBlob?"#22C55E":"#CBD5E1",transition:"height 0.07s ease"}}/>)}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:600,color:recording?"#EF4444":audioBlob?"#16A34A":S.muted}}>
+        {recording&&<span className="pulse">●</span>}
+        {recording?"Enregistrement en cours…":audioBlob?"✓ Terminé":"Appuyez pour démarrer"}
+      </div>
+      <div style={{width:"100%",maxWidth:290,display:"flex",flexDirection:"column",gap:11}}>
+        {!recording&&!audioBlob&&<button onClick={onStart} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:"#EF4444",color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>🎙️ Démarrer</button>}
+        {recording&&<button onClick={onStop} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:"#111827",color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>⏹ Arrêter</button>}
+        {audioBlob&&!recording&&<>
+          <button onClick={onProcess} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>⚡ Générer le compte rendu</button>
+          <button onClick={onStart} style={{width:"100%",padding:"12px 0",borderRadius:16,border:`2px solid ${S.border}`,background:S.white,color:S.muted,fontWeight:600,fontSize:15,cursor:"pointer"}}>🔄 Recommencer</button>
+        </>}
+      </div>
+      <div style={{background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:14,padding:"11px 16px",maxWidth:310,textAlign:"center"}}>
+        <p style={{fontSize:12,color:"#1D4ED8"}}>💡 Parlez naturellement. L'IA identifiera automatiquement les deux interlocuteurs et rédigera le CR selon la trame choisie.</p>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── PROCESSING ───────────────────────────────────────────────────────────────
+function ProcPage({log,err,onBack,onRetry}){
+  const icons={prog:"⏳",done:"✅",err:"❌"};
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Traitement"/>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"28px 16px",gap:18,maxWidth:520,margin:"0 auto",width:"100%"}}>
+      {!err&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+        <div style={{width:52,height:52,borderRadius:16,background:"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}><span className="spin">⚙️</span></div>
+        <p style={{fontSize:13,color:S.muted}}>Ne fermez pas l'application</p>
+      </div>}
+      <Card style={{width:"100%"}}>
+        {log.length===0&&<div style={{padding:"18px 0",textAlign:"center",fontSize:13,color:S.muted}}>Initialisation…</div>}
+        {log.map((e,i)=><div key={i} style={{padding:"10px 0",display:"flex",alignItems:"flex-start",gap:11,borderBottom:i<log.length-1?`1px solid ${S.border}`:"none"}}>
+          <span style={{fontSize:17,flexShrink:0,marginTop:1}}>{icons[e.s]||"⏳"}</span>
+          <div><p style={{fontSize:13,color:e.s==="err"?"#DC2626":S.text}}>{e.m}</p><p style={{fontSize:11,color:S.muted,marginTop:1}}>{e.t}</p></div>
+        </div>)}
+      </Card>
+      {err&&<div style={{width:"100%"}}>
+        <div style={{background:"#FEF2F2",border:"1.5px solid #FECACA",borderRadius:14,padding:14,marginBottom:10}}>
+          <p style={{fontWeight:600,fontSize:13,color:"#991B1B"}}>Erreur</p>
+          <p style={{fontSize:13,color:"#DC2626",marginTop:3}}>{err}</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+          <button onClick={onBack} style={{padding:"12px 0",borderRadius:12,border:"none",background:S.light,color:S.text,fontWeight:600,cursor:"pointer"}}>Retour</button>
+          <button onClick={onRetry} style={{padding:"12px 0",borderRadius:12,border:"none",background:S.navy,color:"#fff",fontWeight:600,cursor:"pointer"}}>Réessayer</button>
+        </div>
+      </div>}
+    </div>
+  </div>;
+}
+
+// ─── TRANSCRIPT VIEWER ────────────────────────────────────────────────────────
+function TranscriptViewer({utterances,claudeKey,patient,tplName,date}){
+  const [acousticFlags,setAcousticFlags]=useState(null);
+  const [textualFlags,setTextualFlags]=useState(null);
+  const [loadingTx,setLoadingTx]=useState(false);
+  const [txErr,setTxErr]=useState(null);
+  const flagColors={green:"#22C55E",orange:"#F59E0B",red:"#EF4444",grey:"#CBD5E1"};
+
+  const runAcoustic=()=>setAcousticFlags(analyzeAcousticReliability(utterances));
+  const runTextual=async()=>{
+    setLoadingTx(true);setTxErr(null);
+    try{const flags=await analyzeTextualReliability(utterances,claudeKey);setTextualFlags(flags);}
+    catch(e){setTxErr(e.message);}
+    setLoadingTx(false);
+  };
+  const flagMap=useMemo(()=>{const m={};(textualFlags||[]).forEach(f=>m[f.index]=f);return m;},[textualFlags]);
+  const globalScore=useMemo(()=>{
+    if(!acousticFlags&&!textualFlags)return null;
+    const total=utterances.length;if(!total)return null;
+    let issues=0;
+    if(acousticFlags)issues+=acousticFlags.filter(f=>f==="red").length*2+acousticFlags.filter(f=>f==="orange").length;
+    if(textualFlags)issues+=(textualFlags.filter(f=>f.level==="error").length*3+textualFlags.filter(f=>f.level==="warning").length);
+    return Math.max(0,Math.round(100-(issues/total)*15));
+  },[acousticFlags,textualFlags,utterances]);
+
+  if(!utterances||!utterances.length)return <div style={{padding:16,textAlign:"center",color:S.muted,fontSize:13}}>Pas de transcription disponible</div>;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:10,padding:"12px 16px"}}>
+    {/* Toolbar */}
+    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+      <button onClick={runAcoustic} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${acousticFlags?"#86EFAC":S.border}`,background:acousticFlags?"#F0FDF4":S.white,color:acousticFlags?"#15803D":S.text,fontWeight:600,fontSize:12,cursor:"pointer"}}>
+        📊 {acousticFlags?"Acoustique ✓":"Analyse acoustique"}
+      </button>
+      <button onClick={runTextual} disabled={loadingTx||!claudeKey} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${textualFlags?"#86EFAC":S.border}`,background:textualFlags?"#F0FDF4":S.white,color:textualFlags?"#15803D":!claudeKey?"#CBD5E1":S.text,fontWeight:600,fontSize:12,cursor:claudeKey&&!loadingTx?"pointer":"not-allowed"}}>
+        {loadingTx?"⏳ Analyse…":textualFlags?"🧠 Textuel ✓":"🧠 Analyse textuelle (IA)"}
+      </button>
+      <button onClick={()=>exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplName,date)} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${S.teal}`,background:"transparent",color:S.teal,fontWeight:600,fontSize:12,cursor:"pointer"}}>
+        💾 Sauvegarder .md
+      </button>
+    </div>
+    {txErr&&<div style={{padding:"8px 12px",borderRadius:10,background:"#FEF2F2",border:"1px solid #FECACA",fontSize:12,color:"#DC2626"}}>Erreur : {txErr}</div>}
+    {/* Score global */}
+    {globalScore!==null&&<div style={{padding:"10px 14px",borderRadius:12,display:"flex",alignItems:"center",gap:12,background:globalScore>=85?"#F0FDF4":globalScore>=65?"#FFFBEB":"#FEF2F2",border:`1.5px solid ${globalScore>=85?"#86EFAC":globalScore>=65?"#FCD34D":"#FECACA"}`}}>
+      <div style={{fontSize:26,fontWeight:700,color:globalScore>=85?"#15803D":globalScore>=65?"#92400E":"#DC2626"}}>{globalScore}%</div>
+      <div><div style={{fontSize:13,fontWeight:600,color:globalScore>=85?"#15803D":globalScore>=65?"#92400E":"#DC2626"}}>Fiabilité estimée</div><div style={{fontSize:11,color:S.muted}}>{acousticFlags?"acoustique ":""}{textualFlags?"textuelle ":""}analysé</div></div>
+    </div>}
+    {/* Utterances */}
+    {utterances.map((u,i)=>{
+      const acFlag=acousticFlags?acousticFlags[i]:null;
+      const txFlag=flagMap[i];
+      const borderColor=txFlag?.level==="error"?"#FECACA":txFlag?.level==="warning"?"#FCD34D":acFlag==="red"?"#FECACA":acFlag==="orange"?"#FDE68A":S.border;
+      const bgColor=txFlag?.level==="error"?"#FEF2F2":txFlag?.level==="warning"?"#FFFBEB":acFlag==="red"?"#FEF2F2":acFlag==="orange"?"#FFFBEB":S.white;
+      return <div key={i} style={{borderRadius:12,padding:"10px 12px",border:`1.5px solid ${borderColor}`,background:bgColor}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:S.muted,fontFamily:"monospace",flexShrink:0}}>[{fmtMs(u.startMs)}]</span>
+          <span style={{fontSize:12,fontWeight:700,color:S.navy,flexShrink:0}}>Locuteur {u.speaker}</span>
+          {acFlag&&acFlag!=="grey"&&<span style={{width:8,height:8,borderRadius:"50%",background:flagColors[acFlag],flexShrink:0,display:"inline-block"}} title={u.avgConfidence!==null?`Confiance : ${Math.round(u.avgConfidence*100)}%`:""}/>}
+          {txFlag&&<span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:999,background:txFlag.level==="error"?"#FEF2F2":"#FFFBEB",color:txFlag.level==="error"?"#DC2626":"#92400E"}}>{txFlag.level==="error"?"ERREUR":"ATTENTION"}</span>}
+        </div>
+        <p style={{fontSize:13,color:S.text,lineHeight:1.6,margin:0}}>{u.text}</p>
+        {txFlag&&<p style={{fontSize:11,color:txFlag.level==="error"?"#DC2626":"#92400E",marginTop:4,fontStyle:"italic"}}>⚠️ {txFlag.reason}</p>}
+        {acFlag&&acFlag!=="green"&&u.avgConfidence!==null&&<p style={{fontSize:11,color:S.muted,marginTop:2}}>📊 Confiance acoustique : {Math.round(u.avgConfidence*100)}%</p>}
+      </div>;
+    })}
+    {/* Légende */}
+    {(acousticFlags||textualFlags)&&<div style={{display:"flex",gap:12,flexWrap:"wrap",paddingTop:4}}>
+      {acousticFlags&&<><span style={{fontSize:11,color:S.muted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}/>Acoustique fiable</span><span style={{fontSize:11,color:S.muted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:"#F59E0B",display:"inline-block"}}/>Moyenne</span><span style={{fontSize:11,color:S.muted,display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:"#EF4444",display:"inline-block"}}/>Faible</span></>}
+      {textualFlags&&<><span style={{fontSize:11,color:"#92400E"}}>🟠 Avertissement</span><span style={{fontSize:11,color:"#DC2626"}}>🔴 Erreur textuelle</span></>}
+    </div>}
+  </div>;
+}
+
+// ─── EDIT ─────────────────────────────────────────────────────────────────────
+// ─── MODAL CONFIRMATION APPLICATION ──────────────────────────────────────────
+function ActionModal({type,item,cr,onConfirm,onCancel}){
+  const initText=()=>{
+    if(type==="suggestion")return item.ameliore||"";
+    if(type==="omission")return item.transcrit||"";
+    if(type==="contradiction")return item.dans_transcript||"";
+    return "";
+  };
+  const [text,setText]=useState(initText);
+  const cfg={
+    suggestion:{title:"Appliquer la suggestion",color:"#1D4ED8",bg:"#EFF6FF",btnLabel:"✅ Remplacer dans le CR"},
+    omission:{title:"Ajouter l'information manquante",color:"#DC2626",bg:"#FEF2F2",btnLabel:"✅ Ajouter en fin de CR"},
+    contradiction:{title:"Corriger la contradiction",color:"#92400E",bg:"#FFFBEB",btnLabel:"✅ Remplacer dans le CR"},
+  }[type];
+  const handleConfirm=()=>{
+    let next=cr;
+    if(type==="suggestion"){
+      next=cr.includes(item.original)?cr.replace(item.original,text):cr+`\n\n[Reformulation suggérée : ${text}]`;
+    }else if(type==="omission"){
+      next=cr+`\n\n[Information ajoutée — ${item.timestamp}] ${text}`;
+    }else if(type==="contradiction"){
+      next=cr.includes(item.dans_cr)?cr.replace(item.dans_cr,text):cr+`\n\n[Correction : ${text}]`;
+    }
+    onConfirm(next);
+  };
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={onCancel}>
+    <div onClick={e=>e.stopPropagation()} style={{background:S.white,borderRadius:20,padding:22,width:"100%",maxWidth:480,boxShadow:"0 8px 40px rgba(0,0,0,0.22)"}}>
+      <div style={{fontWeight:700,fontSize:16,color:S.navy,marginBottom:14,fontFamily:"'DM Serif Display',serif"}}>{cfg.title}</div>
+      {type==="suggestion"&&<div style={{marginBottom:12,padding:"9px 13px",borderRadius:11,background:"#F8FAFC",fontSize:12,color:S.muted,fontStyle:"italic",lineHeight:1.5}}>Passage actuel : "{item.original}"</div>}
+      {type==="contradiction"&&<>
+        <div style={{fontSize:12,color:"#92400E",fontWeight:600,marginBottom:4}}>Passage à corriger dans le CR :</div>
+        <div style={{marginBottom:10,padding:"9px 13px",borderRadius:11,background:"#FFFBEB",fontSize:12,color:S.text,fontStyle:"italic",lineHeight:1.5}}>"{item.dans_cr}"</div>
+        <div style={{fontSize:12,color:"#15803D",fontWeight:600,marginBottom:4}}>Ce qui a été dit :</div>
+        <div style={{marginBottom:12,padding:"9px 13px",borderRadius:11,background:"#F0FDF4",fontSize:12,color:S.text,lineHeight:1.5}}>"{item.dans_transcript}"</div>
+      </>}
+      {type==="omission"&&<div style={{marginBottom:12,padding:"9px 13px",borderRadius:11,background:"#FEF2F2",fontSize:12,color:S.text,lineHeight:1.5}}>⏱ {item.timestamp} — "{item.transcrit}"</div>}
+      <div style={{fontSize:12,fontWeight:600,color:S.text,marginBottom:7}}>
+        {type==="suggestion"?"Reformulation à appliquer :":type==="omission"?"Information à ajouter (éditez si nécessaire) :":"Correction à appliquer :"}
+      </div>
+      <textarea value={text} onChange={e=>setText(e.target.value)} rows={4}
+        style={{width:"100%",border:`1.5px solid ${cfg.color}50`,borderRadius:12,padding:"10px 12px",fontSize:13,color:S.text,background:cfg.bg,resize:"vertical",outline:"none",lineHeight:1.6}}/>
+      <div style={{fontSize:11,color:S.muted,marginTop:6,marginBottom:14,lineHeight:1.5}}>
+        {type==="suggestion"&&"Le texte original sera remplacé par la reformulation ci-dessus."}
+        {type==="omission"&&"L'information sera ajoutée à la fin du CR avec horodatage. Reformulez-la en style médical."}
+        {type==="contradiction"&&"Le passage incohérent sera remplacé. Vérifiez la reformulation avant de valider."}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+        <button onClick={onCancel} style={{padding:"12px 0",borderRadius:12,border:"none",background:S.light,color:S.text,fontWeight:600,cursor:"pointer",fontSize:14}}>Annuler</button>
+        <button onClick={handleConfirm} disabled={!text.trim()} style={{padding:"12px 0",borderRadius:12,border:"none",background:text.trim()?cfg.color:S.light,color:text.trim()?"#fff":S.muted,fontWeight:700,cursor:text.trim()?"pointer":"not-allowed",fontSize:14}}>{cfg.btnLabel}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── SECTION COLLAPSIBLE ──────────────────────────────────────────────────────
+function CollapsibleSection({title,count,color,bgColor,borderColor,defaultOpen=true,children}){
+  const [open,setOpen]=useState(defaultOpen);
+  return <div style={{marginBottom:4}}>
+    <button onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 13px",borderRadius:open?"12px 12px 0 0":12,border:`1.5px solid ${borderColor||color}30`,background:bgColor,cursor:"pointer",textAlign:"left"}}>
+      <span style={{fontWeight:700,fontSize:13,color}}>{title}</span>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:999,background:color,color:"#fff"}}>{count}</span>
+        <span style={{fontSize:14,color,transition:"transform .2s",display:"inline-block",transform:open?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+      </div>
+    </button>
+    {open&&<div style={{border:`1.5px solid ${borderColor||color}30`,borderTop:"none",borderRadius:"0 0 12px 12px",padding:"10px 13px",display:"flex",flexDirection:"column",gap:8}}>
+      {children}
+    </div>}
+  </div>;
+}
+
+// ─── REVIEW PANEL ─────────────────────────────────────────────────────────────
+function ReviewPanel({review,cr,onApply,onClose}){
+  const imp={"haut":"#DC2626","moyen":"#D97706","bas":"#16A34A"};
+  const impBg={"haut":"#FEF2F2","moyen":"#FFFBEB","bas":"#F0FDF4"};
+  const [action,setAction]=useState(null); // {type, item}
+  const [applied,setApplied]=useState(new Set()); // "omission_0", "suggestion_1"…
+  const total=(review.omissions?.length||0)+(review.contradictions?.length||0);
+
+  const handleApply=(newCr,key)=>{
+    onApply(newCr);
+    setApplied(prev=>new Set([...prev,key]));
+    setAction(null);
+  };
+
+  return <>
+    <div style={{position:"fixed",inset:0,background:"rgba(11,45,89,0.55)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:S.bg,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:600,maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 -8px 40px rgba(0,0,0,0.18)"}}>
+        {/* Header */}
+        <div style={{padding:"16px 20px 12px",borderBottom:`1px solid ${S.border}`,flexShrink:0,background:S.white,borderRadius:"24px 24px 0 0"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:17,color:S.navy,fontFamily:"'DM Serif Display',serif"}}>🔍 Rapport de relecture IA</div>
+              <div style={{fontSize:12,color:S.muted,marginTop:2}}>{review.avis_global}</div>
+            </div>
+            <button onClick={onClose} style={{width:32,height:32,borderRadius:10,border:"none",background:S.light,color:S.muted,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+          {/* Compteurs-filtres */}
+          <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:999,background:review.omissions?.length?"#FEF2F2":"#F0FDF4",color:review.omissions?.length?"#DC2626":"#15803D"}}>
+              ⚠️ {review.omissions?.length||0} omission{review.omissions?.length!==1?"s":""}
+            </span>
+            <span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:999,background:review.contradictions?.length?"#FFFBEB":"#F0FDF4",color:review.contradictions?.length?"#92400E":"#15803D"}}>
+              🔄 {review.contradictions?.length||0} contradiction{review.contradictions?.length!==1?"s":""}
+            </span>
+            <span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:999,background:"#EFF6FF",color:"#1D4ED8"}}>
+              💡 {review.suggestions?.length||0} suggestion{review.suggestions?.length!==1?"s":""}
+            </span>
+            <span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:999,background:"#F0FDF4",color:"#15803D"}}>
+              ✅ {review.points_confirmes||0} confirmé{review.points_confirmes!==1?"s":""}
+            </span>
+          </div>
+        </div>
+
+        {/* Body scrollable */}
+        <div style={{flex:1,overflowY:"auto",padding:"12px 16px 28px",display:"flex",flexDirection:"column",gap:10}}>
+
+          {/* Omissions */}
+          {review.omissions?.length>0&&
+            <CollapsibleSection title="⚠️ Omissions détectées" count={review.omissions.length} color="#DC2626" bgColor="#FEF2F2">
+              {review.omissions.map((o,i)=>{
+                const key=`omission_${i}`;
+                const done=applied.has(key);
+                return <div key={i} style={{padding:"10px 12px",borderRadius:10,background:done?"#F0FDF4":impBg[o.impact]||"#FEF2F2",border:`1px solid ${done?"#86EFAC":imp[o.impact]||"#DC2626"}20`,opacity:done?0.6:1}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:11,fontWeight:700,color:"#94A3B8"}}>⏱ {o.timestamp}</span>
+                      <span style={{fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:999,background:imp[o.impact]||"#DC2626",color:"#fff",textTransform:"uppercase"}}>{o.impact}</span>
+                    </div>
+                    {done
+                      ?<span style={{fontSize:11,fontWeight:700,color:"#15803D"}}>✅ Ajouté</span>
+                      :<button onClick={()=>setAction({type:"omission",item:o,key})} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:7,border:"1.5px solid #DC2626",background:"#fff",color:"#DC2626",cursor:"pointer"}}>+ Ajouter</button>
+                    }
+                  </div>
+                  <p style={{fontSize:13,color:S.text,margin:0,lineHeight:1.5}}>"{o.transcrit}"</p>
+                </div>;
+              })}
+            </CollapsibleSection>}
+
+          {/* Contradictions */}
+          {review.contradictions?.length>0&&
+            <CollapsibleSection title="🔄 Contradictions" count={review.contradictions.length} color="#92400E" bgColor="#FFFBEB">
+              {review.contradictions.map((c,i)=>{
+                const key=`contradiction_${i}`;
+                const done=applied.has(key);
+                return <div key={i} style={{padding:"10px 12px",borderRadius:10,background:done?"#F0FDF4":"#FFFBEB",border:"1px solid #FCD34D20",opacity:done?0.6:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:2}}>Dans le CR :</div>
+                      <p style={{fontSize:12,color:S.text,margin:"0 0 5px",lineHeight:1.5,fontStyle:"italic"}}>"{c.dans_cr}"</p>
+                      <div style={{fontSize:11,color:"#15803D",fontWeight:600,marginBottom:2}}>Dans la transcription :</div>
+                      <p style={{fontSize:12,color:S.text,margin:0,lineHeight:1.5}}>"{c.dans_transcript}"</p>
+                    </div>
+                    {done
+                      ?<span style={{fontSize:11,fontWeight:700,color:"#15803D",flexShrink:0}}>✅ Corrigé</span>
+                      :<button onClick={()=>setAction({type:"contradiction",item:c,key})} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:7,border:"1.5px solid #92400E",background:"#fff",color:"#92400E",cursor:"pointer",flexShrink:0}}>Corriger</button>
+                    }
+                  </div>
+                </div>;
+              })}
+            </CollapsibleSection>}
+
+          {/* Suggestions */}
+          {review.suggestions?.length>0&&
+            <CollapsibleSection title="💡 Suggestions de reformulation" count={review.suggestions.length} color="#1D4ED8" bgColor="#EFF6FF">
+              {review.suggestions.map((s,i)=>{
+                const key=`suggestion_${i}`;
+                const done=applied.has(key);
+                return <div key={i} style={{padding:"10px 12px",borderRadius:10,background:done?"#F0FDF4":"#EFF6FF",border:"1px solid #BFDBFE20",opacity:done?0.6:1}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,color:"#64748B",fontWeight:500,marginBottom:3,fontStyle:"italic"}}>Actuel : "{s.original}"</div>
+                      <div style={{fontSize:13,color:"#1D4ED8",fontWeight:600,marginBottom:3}}>→ {s.ameliore}</div>
+                      <div style={{fontSize:11,color:S.muted}}>{s.raison}</div>
+                    </div>
+                    {done
+                      ?<span style={{fontSize:11,fontWeight:700,color:"#15803D",flexShrink:0}}>✅ Appliqué</span>
+                      :<button onClick={()=>setAction({type:"suggestion",item:s,key})} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:7,border:"1.5px solid #1D4ED8",background:"#fff",color:"#1D4ED8",cursor:"pointer",flexShrink:0}}>Appliquer</button>
+                    }
+                  </div>
+                </div>;
+              })}
+            </CollapsibleSection>}
+
+          {total===0&&!review.suggestions?.length&&<div style={{textAlign:"center",padding:"24px 0"}}>
+            <div style={{fontSize:32,marginBottom:8}}>🎉</div>
+            <div style={{fontWeight:700,color:"#15803D",fontSize:15}}>Aucun problème détecté</div>
+            <div style={{fontSize:13,color:S.muted,marginTop:4}}>Le CR est cohérent avec la transcription.</div>
+          </div>}
+        </div>
+      </div>
+    </div>
+
+    {/* Modal confirmation */}
+    {action&&<ActionModal
+      type={action.type}
+      item={action.item}
+      cr={cr}
+      onConfirm={newCr=>handleApply(newCr,action.key)}
+      onCancel={()=>setAction(null)}
+    />}
+  </>;
+}
+
+function EditPage({cr,setCr,utterances,claudeKey,patient,tpl,onExport,onBack}){
+  const [tab,setTab]=useState("cr");
+  const [f,setF]=useState(false);
+  const [reviewing,setReviewing]=useState(false);
+  const [reviewResult,setReviewResult]=useState(null);
+  const [reviewErr,setReviewErr]=useState(null);
+  const [showReview,setShowReview]=useState(false);
+
+  const runReview=async()=>{
+    if(!claudeKey||!cr.trim()||!utterances.length)return;
+    setReviewing(true);setReviewErr(null);
+    try{const r=await reviewCR(cr,utterances,claudeKey);setReviewResult(r);setShowReview(true);}
+    catch(e){setReviewErr(e.message);}
+    setReviewing(false);
+  };
+
+  const hasIssues=reviewResult&&((reviewResult.omissions?.length||0)+(reviewResult.contradictions?.length||0))>0;
+
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Relecture & correction" onBack={onBack} sub={tpl?.name+(patient?" — "+patient:"")}/>
+    {/* Tabs */}
+    <div style={{display:"flex",background:S.white,borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+      <button onClick={()=>setTab("cr")} style={{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:700,fontSize:13,color:tab==="cr"?S.navy:S.muted,borderBottom:`3px solid ${tab==="cr"?S.navy:"transparent"}`,cursor:"pointer"}}>📄 Compte rendu</button>
+      <button onClick={()=>setTab("transcript")} style={{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:700,fontSize:13,color:tab==="transcript"?S.navy:S.muted,borderBottom:`3px solid ${tab==="transcript"?S.navy:"transparent"}`,cursor:"pointer"}}>🎙️ Transcription</button>
+    </div>
+    {tab==="cr"&&<>
+      {/* Toolbar CR */}
+      <div style={{padding:"8px 16px",background:S.white,borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexShrink:0}}>
+        <span style={{fontSize:11,color:S.muted}}>{cr.length} caractères</span>
+        <div style={{display:"flex",gap:7,alignItems:"center"}}>
+          {reviewResult&&<button onClick={()=>setShowReview(true)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:9,border:`1.5px solid ${hasIssues?"#FECACA":"#86EFAC"}`,background:hasIssues?"#FEF2F2":"#F0FDF4",color:hasIssues?"#DC2626":"#15803D",fontWeight:700,fontSize:11,cursor:"pointer"}}>
+            {hasIssues?`⚠️ ${(reviewResult.omissions?.length||0)+(reviewResult.contradictions?.length||0)} problème(s)`:"✅ Relu"} — voir
+          </button>}
+          <button onClick={runReview} disabled={reviewing||!claudeKey||!utterances.length} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,border:`1.5px solid ${S.teal}`,background:reviewing?"#F8FAFC":S.white,color:reviewing?S.muted:S.teal,fontWeight:700,fontSize:12,cursor:(!claudeKey||!utterances.length||reviewing)?"not-allowed":"pointer",opacity:(!claudeKey||!utterances.length)?0.5:1}}>
+            {reviewing?<><span className="spin" style={{fontSize:12}}>⚙️</span> Relecture…</>:"🔍 Relecture IA"}
+          </button>
+        </div>
+      </div>
+      {reviewErr&&<div style={{margin:"8px 16px 0",padding:"8px 12px",borderRadius:10,background:"#FEF2F2",border:"1px solid #FECACA",fontSize:12,color:"#DC2626",flexShrink:0}}>Erreur relecture : {reviewErr}</div>}
+      <div style={{flex:1,padding:"11px 16px 7px",display:"flex",flexDirection:"column",minHeight:0}}>
+        <textarea value={cr} onChange={e=>setCr(e.target.value)}
+          style={{flex:1,width:"100%",borderRadius:16,padding:15,fontSize:14,border:`1.5px solid ${f?S.teal:S.border}`,background:S.white,color:S.text,lineHeight:1.7,resize:"none",outline:"none",minHeight:280}}
+          onFocus={()=>setF(true)} onBlur={()=>setF(false)} placeholder="Le compte rendu apparaîtra ici…"/>
+      </div>
+      <div style={{padding:"10px 16px 20px",flexShrink:0}}>
+        <button onClick={onExport} disabled={!cr.trim()} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:cr.trim()?S.navy:S.light,color:cr.trim()?"#fff":S.muted,fontWeight:700,fontSize:16,cursor:cr.trim()?"pointer":"not-allowed"}}>
+          💾 Enregistrer & Exporter
+        </button>
+      </div>
+    </>}
+    {tab==="transcript"&&<div style={{flex:1,overflowY:"auto",paddingBottom:20}}>
+      <TranscriptViewer utterances={utterances} claudeKey={claudeKey} patient={patient} tplName={tpl?.name||""} date={new Date().toISOString()}/>
+    </div>}
+    {/* Modal relecture */}
+    {showReview&&reviewResult&&<ReviewPanel review={reviewResult} cr={cr} onApply={setCr} onClose={()=>setShowReview(false)}/>}
+  </div>;
+}
+
+// ─── EXPORT PAGE ──────────────────────────────────────────────────────────────
+function ExportPage({cr,patient,dateIso,tplName,savedFileName,onBack,onHome}){
+  const [done,setDone]=useState({word:false,pdf:false});
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Export" onBack={onBack}/>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px",gap:20,maxWidth:380,margin:"0 auto",width:"100%"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{width:72,height:72,borderRadius:22,background:"#F0FDF4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 12px"}}>💾</div>
+        <h2 style={{fontSize:22,fontWeight:700,color:S.navy,fontFamily:"'DM Serif Display',serif"}}>CR enregistré</h2>
+        <p style={{fontSize:13,color:S.muted,marginTop:3}}>{tplName} · {patient||"Anonyme"}</p>
+        <p style={{fontSize:12,color:S.muted,marginTop:1}}>{fmtDate(dateIso)}</p>
+      </div>
+
+      {/* Auto-save status */}
+      {savedFileName
+        ?<div style={{width:"100%",background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:14,padding:"12px 16px",textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#15803D"}}>✅ Sauvegardé automatiquement</div>
+          <div style={{fontSize:11,color:S.muted,marginTop:3,fontFamily:"monospace"}}>{savedFileName}</div>
+        </div>
+        :<div style={{width:"100%",background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:14,padding:"12px 16px",textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:600,color:"#92400E"}}>⚠️ Pas de dossier configuré</div>
+          <div style={{fontSize:11,color:S.muted,marginTop:2}}>Utilisez les boutons ci-dessous pour exporter manuellement</div>
+        </div>
+      }
+
+      <div style={{width:"100%",display:"flex",flexDirection:"column",gap:9}}>
+        <button onClick={()=>{downloadWord(cr,patient,dateIso);setDone(d=>({...d,word:true}));}} style={{width:"100%",padding:"13px 0",borderRadius:15,fontWeight:700,fontSize:15,cursor:"pointer",background:done.word?"#F0FDF4":S.navy,color:done.word?"#15803D":"#fff",border:`2px solid ${done.word?"#86EFAC":S.navy}`}}>
+          📝 {done.word?"Word téléchargé ✓":"Télécharger en Word (.doc)"}
+        </button>
+        <button onClick={()=>{exportPDF(cr);setDone(d=>({...d,pdf:true}));}} style={{width:"100%",padding:"13px 0",borderRadius:15,fontWeight:700,fontSize:15,cursor:"pointer",background:done.pdf?"#F0FDF4":"#DC2626",color:done.pdf?"#15803D":"#fff",border:`2px solid ${done.pdf?"#86EFAC":"#DC2626"}`}}>
+          📋 {done.pdf?"PDF exporté ✓":"Exporter en PDF"}
+        </button>
+        <button onClick={onHome} style={{width:"100%",padding:"12px 0",borderRadius:15,border:`2px solid ${S.border}`,background:S.white,color:S.muted,fontWeight:600,fontSize:15,cursor:"pointer"}}>🏠 Nouvelle consultation</button>
+      </div>
+      <p style={{fontSize:11,textAlign:"center",color:S.muted}}>Le CR est aussi accessible dans <strong>Dossiers patients</strong>.</p>
+    </div>
+  </div>;
+}
+
+// ─── HISTORY ──────────────────────────────────────────────────────────────────
+function HistoryPage({onBack,onOpenRecord}){
+  const [records,setRecords]=useState(loadRecords);
+  const [search,setSearch]=useState("");
+  const grouped=useMemo(()=>{
+    const q=search.toLowerCase().trim();
+    const filtered=q?records.filter(r=>(r.patient||"").toLowerCase().includes(q)||(r.tplName||"").toLowerCase().includes(q)):records;
+    const map={};
+    filtered.forEach(r=>{const k=r.patient||"— Anonyme —";if(!map[k])map[k]=[];map[k].push(r);});
+    return Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],"fr"));
+  },[records,search]);
+  const del=id=>{if(!window.confirm("Supprimer ce compte rendu ?"))return;const u=records.filter(r=>r.id!==id);saveRecords(u);setRecords(u);};
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Dossiers patients" onBack={onBack}/>
+    <div style={{padding:"11px 16px",background:S.white,borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+      <FInput value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher un patient ou un type…"/>
+    </div>
+    <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px",maxWidth:600,margin:"0 auto",width:"100%"}}>
+      {records.length===0&&<div style={{textAlign:"center",padding:"56px 20px"}}>
+        <div style={{fontSize:44,marginBottom:10}}>📂</div>
+        <p style={{fontWeight:600,color:S.text,fontSize:15}}>Aucun dossier enregistré</p>
+        <p style={{fontSize:13,color:S.muted,marginTop:5}}>Les CR générés apparaîtront ici après sauvegarde</p>
+      </div>}
+      {grouped.length===0&&records.length>0&&<div style={{textAlign:"center",padding:"36px 20px"}}><p style={{fontSize:14,color:S.muted}}>Aucun résultat pour « {search} »</p></div>}
+      {grouped.map(([patientName,recs])=>(
+        <div key={patientName} style={{marginBottom:22}} className="fadein">
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}>
+            <div style={{width:34,height:34,borderRadius:11,background:S.navy,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:14,flexShrink:0}}>{patientName[0].toUpperCase()}</div>
+            <div><div style={{fontWeight:700,color:S.text,fontFamily:"'DM Serif Display',serif",fontSize:16}}>{patientName}</div><div style={{fontSize:12,color:S.muted}}>{recs.length} consultation{recs.length>1?"s":""}</div></div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:7,paddingLeft:44}}>
+            {recs.map(r=>(
+              <div key={r.id} style={{background:S.white,border:`1.5px solid ${S.border}`,borderRadius:14,padding:"11px 13px",display:"flex",alignItems:"center",gap:11}}>
+                <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>onOpenRecord(r)}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:3}}><Badge cat={r.cat||"Général"}/><span style={{fontSize:12,color:S.muted}}>{fmtDateShort(r.date)}</span></div>
+                  <div style={{fontSize:13,fontWeight:600,color:S.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.tplName}</div>
+                  <div style={{fontSize:11,color:S.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.cr.slice(0,75)}…</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                  <button onClick={()=>downloadWord(r.cr,r.patient,r.date)} style={{padding:"5px 10px",borderRadius:8,border:"none",background:"#EFF6FF",color:"#1D4ED8",fontWeight:700,fontSize:12,cursor:"pointer"}}>📝 Word</button>
+                  <button onClick={()=>del(r.id)} style={{padding:"5px 10px",borderRadius:8,border:"none",background:"#FEF2F2",color:"#DC2626",fontWeight:700,fontSize:12,cursor:"pointer"}}>🗑</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ─── RECORD DETAIL ────────────────────────────────────────────────────────────
+function RecordDetail({record,claudeKey,onBack}){
+  const [cr,setCr]=useState(record.cr);
+  const [edited,setEdited]=useState(false);
+  const [saved,setSaved]=useState(false);
+  const [f,setF]=useState(false);
+  const [tab,setTab]=useState("cr");
+  const change=v=>{setCr(v);setEdited(true);setSaved(false);};
+  const save=()=>{const recs=loadRecords();const i=recs.findIndex(r=>r.id===record.id);if(i>=0){recs[i]={...recs[i],cr};saveRecords(recs);}setSaved(true);setEdited(false);};
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title={record.patient||"Anonyme"} onBack={onBack} sub={record.tplName+" · "+fmtDate(record.date)}/>
+    <div style={{display:"flex",background:S.white,borderBottom:`1px solid ${S.border}`,flexShrink:0}}>
+      <button onClick={()=>setTab("cr")} style={{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:700,fontSize:13,color:tab==="cr"?S.navy:S.muted,borderBottom:`3px solid ${tab==="cr"?S.navy:"transparent"}`,cursor:"pointer"}}>📄 Compte rendu</button>
+      <button onClick={()=>setTab("transcript")} style={{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:700,fontSize:13,color:tab==="transcript"?S.navy:S.muted,borderBottom:`3px solid ${tab==="transcript"?S.navy:"transparent"}`,cursor:"pointer",opacity:record.utterances?.length?1:0.4}}>🎙️ Transcription</button>
+    </div>
+    {tab==="cr"&&<>
+      <div style={{padding:"6px 16px",background:S.white,borderBottom:`1px solid ${S.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{display:"flex",gap:7,alignItems:"center"}}><Badge cat={record.cat||"Général"}/><span style={{fontSize:11,color:S.muted}}>{cr.length} car.</span></div>
+        {edited&&<button onClick={save} style={{fontSize:12,fontWeight:700,padding:"5px 11px",borderRadius:8,border:"none",background:"#DCFCE7",color:"#15803D",cursor:"pointer"}}>💾 Sauvegarder</button>}
+        {saved&&!edited&&<span style={{fontSize:12,color:"#15803D",fontWeight:600}}>✓ Sauvegardé</span>}
+      </div>
+      <div style={{flex:1,padding:"11px 16px 7px",display:"flex",flexDirection:"column",minHeight:0}}>
+        <textarea value={cr} onChange={e=>change(e.target.value)}
+          style={{flex:1,width:"100%",borderRadius:16,padding:15,fontSize:14,border:`1.5px solid ${f?S.teal:S.border}`,background:S.white,color:S.text,lineHeight:1.7,resize:"none",outline:"none",minHeight:280}}
+          onFocus={()=>setF(true)} onBlur={()=>setF(false)}/>
+      </div>
+      <div style={{padding:"10px 16px 20px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,flexShrink:0}}>
+        <button onClick={()=>downloadWord(cr,record.patient,record.date)} style={{padding:"13px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>📝 Word</button>
+        <button onClick={()=>exportPDF(cr)} style={{padding:"13px 0",borderRadius:14,border:"none",background:"#DC2626",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>📋 PDF</button>
+      </div>
+    </>}
+    {tab==="transcript"&&<div style={{flex:1,overflowY:"auto",paddingBottom:20}}>
+      {record.utterances?.length
+        ? <TranscriptViewer utterances={record.utterances} claudeKey={claudeKey} patient={record.patient} tplName={record.tplName} date={record.date}/>
+        : <div style={{padding:24,textAlign:"center",color:S.muted,fontSize:13}}>Transcription non disponible pour ce CR (généré avant la v5)</div>}
+    </div>}
+  </div>;
+}
+
+// ─── TEMPLATES PAGE ───────────────────────────────────────────────────────────
+function TplsPage({allTpls,onSave,onBack}){
+  const [creating,setCreating]=useState(false);
+  const [nm,setNm]=useState("");const [cat,setCat]=useState("Personnalisé");const [secs,setSecs]=useState("");
+  const create=()=>{if(!nm.trim()||!secs.trim())return;const sections=secs.split("\n").map(s=>s.trim()).filter(Boolean);if(!sections.length)return;onSave([...allTpls,{id:"c-"+Date.now(),name:nm.trim(),cat,custom:true,sections}]);setNm("");setSecs("");setCreating(false);};
+  const del=id=>{if(window.confirm("Supprimer cette trame ?"))onSave(allTpls.filter(t=>t.id!==id));};
+  return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
+    <Header title="Gérer les trames" onBack={onBack}/>
+    <div style={{flex:1,overflowY:"auto",padding:"16px 16px 40px",maxWidth:600,margin:"0 auto",width:"100%"}}>
+      {allTpls.map(t=><Card key={t.id} style={{marginBottom:11}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+          <div><div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:5}}><Badge cat={t.cat}/>{t.custom&&<span style={{fontSize:11,fontStyle:"italic",color:S.muted}}>Personnalisé</span>}</div><div style={{fontWeight:700,color:S.text,fontFamily:"'DM Serif Display',serif",fontSize:15}}>{t.name}</div></div>
+          {t.custom&&<button onClick={()=>del(t.id)} style={{fontSize:11,fontWeight:700,padding:"4px 9px",borderRadius:8,border:"none",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",flexShrink:0}}>Supprimer</button>}
+        </div>
+        <div style={{marginTop:7}}>{t.sections.map((s,i)=><div key={i} style={{display:"flex",gap:7,fontSize:12,color:S.muted,marginBottom:1}}><span style={{color:"#CBD5E1",minWidth:16}}>{i+1}.</span>{s}</div>)}</div>
+      </Card>)}
+      {!creating
+        ?<button onClick={()=>setCreating(true)} style={{width:"100%",padding:"15px 0",borderRadius:16,border:`2px dashed ${S.teal}`,background:"transparent",color:S.teal,fontWeight:600,fontSize:15,cursor:"pointer"}}>+ Créer une trame personnalisée</button>
+        :<Card>
+          <div style={{fontWeight:700,color:S.navy,fontFamily:"'DM Serif Display',serif",fontSize:16,marginBottom:13}}>Nouvelle trame</div>
+          <FInput value={nm} onChange={e=>setNm(e.target.value)} placeholder="Ex : Suivi post-chirurgie bariatrique" style={{marginBottom:10}}/>
+          <select value={cat} onChange={e=>setCat(e.target.value)} style={{width:"100%",border:`1.5px solid ${S.border}`,borderRadius:12,padding:"10px 12px",fontSize:14,color:S.text,background:S.white,outline:"none",marginBottom:10}}>{Object.keys(CAT).map(c=><option key={c}>{c}</option>)}</select>
+          <label style={{fontSize:13,fontWeight:600,color:S.text,display:"block",marginBottom:5}}>Sections <span style={{fontWeight:400,color:S.muted}}>(une par ligne)</span></label>
+          <FInput value={secs} onChange={e=>setSecs(e.target.value)} placeholder={"MOTIF DE CONSULTATION\nANAMNÈSE\n…"} rows={7}/>
+          <p style={{fontSize:11,color:S.muted,marginTop:4,marginBottom:12}}>{secs.split("\n").filter(s=>s.trim()).length} sections</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+            <button onClick={()=>setCreating(false)} style={{padding:"12px 0",borderRadius:12,border:"none",background:S.light,color:S.text,fontWeight:600,cursor:"pointer"}}>Annuler</button>
+            <button onClick={create} disabled={!nm.trim()||!secs.trim()} style={{padding:"12px 0",borderRadius:12,border:"none",background:nm.trim()&&secs.trim()?S.navy:S.light,color:nm.trim()&&secs.trim()?"#fff":S.muted,fontWeight:600,cursor:nm.trim()&&secs.trim()?"pointer":"not-allowed"}}>Créer</button>
+          </div>
+        </Card>}
+    </div>
+  </div>;
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App(){
+  const [page,setPage]=useState("home");
+  const [apiKey,setApiKey]=useState(()=>{try{return localStorage.getItem(AK)||"";}catch{return "";}});
+  const [claudeKey,setClaudeKey]=useState(()=>{try{return localStorage.getItem(CK)||"";}catch{return "";}});
+  const [allTpls,setAllTpls]=useState(()=>{try{const s=localStorage.getItem(TK);return s?[...TEMPLATES,...JSON.parse(s)]:[...TEMPLATES];}catch{return[...TEMPLATES];}});
+  const [tpl,setTpl]=useState(null);
+  const [patient,setPatient]=useState("");
+  const [folderName,setFolderName]=useState(()=>{try{return localStorage.getItem(FK)||"";}catch{return "";}});
+  const [piiRedaction,setPiiRedaction]=useState(()=>{try{return localStorage.getItem(PK)==="true";}catch{return false;}});
+
+  const [recording,setRecording]=useState(false);
+  const [recTime,setRecTime]=useState(0);
+  const [audioBlob,setAudioBlob]=useState(null);
+  const [audioLv,setAudioLv]=useState(0);
+  const [pLog,setPLog]=useState([]);
+  const [pErr,setPErr]=useState(null);
+  const [utterances,setUtterances]=useState([]); // structured utterances with timestamps
+  const [rawTx,setRawTx]=useState("");
+  const [cr,setCr]=useState("");
+  const [savedRec,setSavedRec]=useState(null);
+  const [savedFileName,setSavedFileName]=useState(null);
+  const [currentRec,setCurrentRec]=useState(null);
+
+  const mrRef=useRef(null),streamRef=useRef(null),timerRef=useRef(null),analyserRef=useRef(null),animRef=useRef(null),ctxRef=useRef(null),recTimeRef=useRef(0);
+
+  useEffect(()=>{try{if(apiKey)localStorage.setItem(AK,apiKey);}catch{}},[apiKey]);
+  useEffect(()=>{try{if(claudeKey)localStorage.setItem(CK,claudeKey);}catch{}},[claudeKey]);
+  useEffect(()=>{try{localStorage.setItem(PK,String(piiRedaction));}catch{}},[piiRedaction]);
+  const saveCustom=tpls=>{try{localStorage.setItem(TK,JSON.stringify(tpls.filter(t=>t.custom)));}catch{}setAllTpls(tpls);};
+
+  const handlePickFolder=async()=>{
+    try{
+      const name=await pickFolder();
+      if(name){setFolderName(name);localStorage.setItem(FK,name);}
+    }catch(e){alert("Impossible d'accéder au dossier : "+e.message);}
+  };
+
+  const startRec=async()=>{
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+      streamRef.current=stream;
+      const ctx=new AudioContext();ctxRef.current=ctx;
+      const src=ctx.createMediaStreamSource(stream);
+      const an=ctx.createAnalyser();an.fftSize=256;src.connect(an);analyserRef.current=an;
+      const tick=()=>{if(!analyserRef.current)return;const d=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(d);setAudioLv(d.reduce((a,b)=>a+b,0)/d.length);animRef.current=requestAnimationFrame(tick);};tick();
+      const mime=["audio/webm","audio/ogg","audio/mp4",""].find(m=>!m||MediaRecorder.isTypeSupported(m));
+      const mr=new MediaRecorder(stream,mime?{mimeType:mime}:{});mrRef.current=mr;
+      const chunks=[];
+      mr.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+      mr.onstop=()=>{setAudioBlob(new Blob(chunks,{type:mime||"audio/webm"}));setRecording(false);};
+      mr.start(1000);
+      recTimeRef.current=0;setRecording(true);setAudioBlob(null);setRecTime(0);
+      timerRef.current=setInterval(()=>{recTimeRef.current+=1;setRecTime(recTimeRef.current);if(recTimeRef.current>=1800)stopRec();},1000);
+    }catch(e){alert("Microphone inaccessible : "+e.message);}
+  };
+  const stopRec=()=>{
+    clearInterval(timerRef.current);cancelAnimationFrame(animRef.current);analyserRef.current=null;
+    if(ctxRef.current){ctxRef.current.close();ctxRef.current=null;}
+    streamRef.current&&streamRef.current.getTracks().forEach(t=>t.stop());
+    if(mrRef.current&&mrRef.current.state!=="inactive")mrRef.current.stop();
+    setAudioLv(0);
+  };
+  const process=async()=>{
+    if(!audioBlob||!apiKey)return;
+    setPage("processing");setPLog([]);setPErr(null);
+    const log=(m,s="prog")=>setPLog(p=>[...p,{m,s,t:new Date().toLocaleTimeString("fr-FR")}]);
+    try{
+      log("Envoi de l'audio vers Gladia…");
+      const url=await uploadAudio(audioBlob,apiKey);log("Audio envoyé ✓","done");
+      log("Transcription avec identification des locuteurs…");
+      const {id,result_url}=await submitTranscription(url,apiKey,piiRedaction);
+      log("Transcription en cours…");
+      const res=await pollTranscript(id,result_url,apiKey);
+      const utts=formatTranscriptStructured(res);
+      setUtterances(utts);
+      const tx=utterancesToPlain(utts,res.result?.transcription?.full_transcript||"");setRawTx(tx);
+      log(`Transcription terminée — ${utts.length} répliques ✓`,"done");
+      log("Génération du compte rendu avec Claude…");
+      const result=await generateCR(tx,tpl,patient,claudeKey);setCr(result);
+      log("Compte rendu généré ✓","done");
+      setTimeout(()=>setPage("editing"),1200);
+    }catch(e){const msg=e.message||"Erreur inconnue";log("Erreur : "+msg,"err");setPErr(msg);}
+  };
+
+  const handleSaveExport=async()=>{
+    const now=new Date().toISOString();
+    const rec={id:"rec-"+Date.now(),patient:patient||"",tplName:tpl?.name||"",cat:tpl?.cat||"Général",date:now,cr,rawTx,utterances};
+    addRecord(rec);setSavedRec(rec);
+    // Auto-save to folder if available
+    const fname=await saveDocToFolder(cr,patient,now);
+    setSavedFileName(fname||null);
+    setPage("export");
+  };
+
+  const reset=()=>{setPage("home");setCr("");setRawTx("");setUtterances([]);setPatient("");setTpl(null);setAudioBlob(null);setRecTime(0);setPLog([]);setPErr(null);setSavedRec(null);setSavedFileName(null);recTimeRef.current=0;};
+
+  const handleImport=(customTpls)=>{
+    if(customTpls.length>0){
+      const merged=[...TEMPLATES,...customTpls];
+      try{localStorage.setItem(TK,JSON.stringify(customTpls));}catch{}
+      setAllTpls(merged);
+    }
+  };
+
+  return <div>
+    {page==="home"       && <HomePage allTpls={allTpls} tpl={tpl} setTpl={setTpl} patient={patient} setPatient={setPatient} apiKey={apiKey} setApiKey={setApiKey} claudeKey={claudeKey} setClaudeKey={setClaudeKey} folderName={folderName} onPickFolder={handlePickFolder} onStart={()=>setPage("recording")} onTpls={()=>setPage("templates")} onHistory={()=>setPage("history")} onSettings={()=>setPage("settings")}/>}
+    {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} onStart={startRec} onStop={stopRec} onProcess={process} onBack={()=>setPage("home")}/>}
+    {page==="processing" && <ProcPage log={pLog} err={pErr} onBack={reset} onRetry={process}/>}
+    {page==="editing"    && <EditPage cr={cr} setCr={setCr} utterances={utterances} claudeKey={claudeKey} patient={patient} tpl={tpl} onExport={handleSaveExport} onBack={reset}/>}
+    {page==="export"     && <ExportPage cr={cr} patient={patient} dateIso={savedRec?.date||new Date().toISOString()} tplName={tpl?.name||""} savedFileName={savedFileName} onBack={()=>setPage("editing")} onHome={reset}/>}
+    {page==="history"    && <HistoryPage onBack={()=>setPage("home")} onOpenRecord={r=>{setCurrentRec(r);setPage("record");}}/>}
+    {page==="record"     && currentRec && <RecordDetail record={currentRec} claudeKey={claudeKey} onBack={()=>setPage("history")}/>}
+    {page==="templates"  && <TplsPage allTpls={allTpls} onSave={saveCustom} onBack={()=>setPage("home")}/>}
+    {page==="settings"   && <SettingsPage allTpls={allTpls} folderName={folderName} onPickFolder={handlePickFolder} onBack={()=>setPage("home")} onImport={handleImport} piiRedaction={piiRedaction} onTogglePii={v=>setPiiRedaction(v)}/>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js");
+    });
+  }
+</script>
+</body>
+</html>
