@@ -1,4 +1,4 @@
-const CACHE = "scrivia-v7";
+const CACHE = "scrivia-v8";
 const ASSETS = ["/", "/index.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", e => {

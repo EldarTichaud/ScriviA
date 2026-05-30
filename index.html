@@ -153,7 +153,6 @@ async function submitTranscription(url,key,piiRedaction=false){
   // v6 : endpoint pre-recorded (l'ancien /v2/transcription est déprécié depuis 2025)
   const body={
     audio_url:url,
-    model:"solaria-1",
     diarization:true,
     diarization_config:{min_speakers:1,max_speakers:2},
     language_config:{languages:["fr"],code_switching:false},
