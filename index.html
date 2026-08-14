@@ -244,7 +244,7 @@ function analyzeAcousticReliability(utterances){
 // Textual reliability via Claude
 async function analyzeTextualReliability(utterances){
   const tx=utterances.map((u,i)=>`[${i}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
-  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,system:`Tu es expert en transcription médicale. Analyse cette transcription de consultation diététique. Identifie les passages textuellement incohérents ou suspects.\nRéponds UNIQUEMENT en JSON valide, format exact : {"flags":[{"index":N,"level":"warning"|"error","reason":"explication courte en français"}]}\n- "error" : valeur médicale impossible (glycémie 0.4, IMC 85...), terme médical clairement déformé, phrase brisée\n- "warning" : valeur atypique, attribution de locuteur suspecte, terme ambigu\nSi aucune incohérence : {"flags":[]}`,messages:[{role:"user",content:`Transcription :\n${tx}`}]})});
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:1000,system:`Tu es expert en transcription médicale. Analyse cette transcription de consultation diététique. Identifie les passages textuellement incohérents ou suspects.\nRéponds UNIQUEMENT en JSON valide, format exact : {"flags":[{"index":N,"level":"warning"|"error","reason":"explication courte en français"}]}\n- "error" : valeur médicale impossible (glycémie 0.4, IMC 85...), terme médical clairement déformé, phrase brisée\n- "warning" : valeur atypique, attribution de locuteur suspecte, terme ambigu\nSi aucune incohérence : {"flags":[]}`,messages:[{role:"user",content:`Transcription :\n${tx}`}]})});
   const d=await r.json();if(d.error)throw new Error(d.error.message);
   try{const clean=d.content[0].text.replace(/```json|```/g,"").trim();return JSON.parse(clean).flags||[];}catch{return [];}
 }
@@ -273,7 +273,7 @@ function exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplNam
 // ─── RELECTURE IA ─────────────────────────────────────────────────────────────
 async function reviewCR(cr,utterances){
   const tx=utterances.map(u=>`[${fmtMs(u.startMs)}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
-  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
 
 Identifie précisément :
 1. Les OMISSIONS : informations importantes dites dans la consultation mais absentes du CR
@@ -295,7 +295,7 @@ Si catégorie vide : tableau vide []. Sois rigoureux mais non sur-interprétatif
 }
 
 async function generateCR(transcript,tpl,patient){
-  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:4000,system:buildPrompt(tpl,patient),messages:[{role:"user",content:`Transcription :\n\n${transcript}\n\nRédige le compte rendu structuré.`}]})});
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,system:buildPrompt(tpl,patient),messages:[{role:"user",content:`Transcription :\n\n${transcript}\n\nRédige le compte rendu structuré.`}]})});
   const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;
 }
 
