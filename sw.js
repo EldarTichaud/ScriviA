@@ -1,4 +1,4 @@
-const CACHE = "scrivia-v9";
+const CACHE = "scrivia-v10";
 const ASSETS = ["/", "/index.html", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -14,9 +14,18 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  // API calls (Gladia, Claude) : toujours réseau
+  // API calls (Gladia, Claude) : toujours réseau, jamais de cache
   if (e.request.url.includes("api.gladia.io") || e.request.url.includes("api.anthropic.com")) return;
+
+  // Réseau en priorité (toujours la dernière version si en ligne),
+  // secours sur le cache uniquement si hors-ligne
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        const resClone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, resClone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

@@ -651,7 +651,7 @@ function TranscriptViewer({utterances,patient,tplName,date}){
   const flagMap=useMemo(()=>{const m={};(textualFlags||[]).forEach(f=>m[f.index]=f);return m;},[textualFlags]);
   const globalScore=useMemo(()=>{
     if(!acousticFlags&&!textualFlags)return null;
-    const total=utterances.length;if(!total)return null;
+    const total=utterances?.length||0;if(!total)return null;
     let issues=0;
     if(acousticFlags)issues+=acousticFlags.filter(f=>f==="red").length*2+acousticFlags.filter(f=>f==="orange").length;
     if(textualFlags)issues+=(textualFlags.filter(f=>f.level==="error").length*3+textualFlags.filter(f=>f.level==="warning").length);
@@ -919,7 +919,7 @@ function EditPage({cr,setCr,utterances,patient,tpl,onExport,onBack}){
   const [showReview,setShowReview]=useState(false);
 
   const runReview=async()=>{
-    if(!cr.trim()||!utterances.length)return;
+    if(!cr.trim()||!utterances?.length)return;
     setReviewing(true);setReviewErr(null);
     try{const r=await reviewCR(cr,utterances);setReviewResult(r);setShowReview(true);}
     catch(e){setReviewErr(e.message);}
@@ -943,7 +943,7 @@ function EditPage({cr,setCr,utterances,patient,tpl,onExport,onBack}){
           {reviewResult&&<button onClick={()=>setShowReview(true)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:9,border:`1.5px solid ${hasIssues?"#FECACA":"#86EFAC"}`,background:hasIssues?"#FEF2F2":"#F0FDF4",color:hasIssues?"#DC2626":"#15803D",fontWeight:700,fontSize:11,cursor:"pointer"}}>
             {hasIssues?`⚠️ ${(reviewResult.omissions?.length||0)+(reviewResult.contradictions?.length||0)} problème(s)`:"✅ Relu"} — voir
           </button>}
-          <button onClick={runReview} disabled={reviewing||!utterances.length} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,border:`1.5px solid ${S.teal}`,background:reviewing?"#F8FAFC":S.white,color:reviewing?S.muted:S.teal,fontWeight:700,fontSize:12,cursor:(!utterances.length||reviewing)?"not-allowed":"pointer",opacity:!utterances.length?0.5:1}}>
+          <button onClick={runReview} disabled={reviewing||!utterances?.length} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,border:`1.5px solid ${S.teal}`,background:reviewing?"#F8FAFC":S.white,color:reviewing?S.muted:S.teal,fontWeight:700,fontSize:12,cursor:(!utterances?.length||reviewing)?"not-allowed":"pointer",opacity:!utterances?.length?0.5:1}}>
             {reviewing?<><span className="spin" style={{fontSize:12}}>⚙️</span> Relecture…</>:"🔍 Relecture IA"}
           </button>
         </div>
