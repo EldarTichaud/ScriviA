@@ -151,12 +151,12 @@ ANONYMISATION : si des noms ou prénoms de patients, de proches, de médecins ou
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 // ─── GLADIA API ───────────────────────────────────────────────────────────────
-async function uploadAudio(blob,key){
+async function uploadAudio(blob){
   const fd=new FormData();fd.append("audio",blob,"audio.webm");
-  const r=await fetch("https://api.gladia.io/v2/upload",{method:"POST",headers:{"x-gladia-key":key},body:fd});
+  const r=await fetch("/api/gladia-upload",{method:"POST",body:fd});
   const d=await r.json();if(!d.audio_url)throw new Error("Upload Gladia échoué : "+JSON.stringify(d));return d.audio_url;
 }
-async function submitTranscription(url,key,piiRedaction=false){
+async function submitTranscription(url,piiRedaction=false){
   // v6 : endpoint pre-recorded (l'ancien /v2/transcription est déprécié depuis 2025)
   const body={
     audio_url:url,
@@ -187,11 +187,11 @@ async function submitTranscription(url,key,piiRedaction=false){
       processed_text_type:"MARKER"
     };
   }
-  const r=await fetch("https://api.gladia.io/v2/pre-recorded",{method:"POST",headers:{"x-gladia-key":key,"content-type":"application/json"},body:JSON.stringify(body)});
+  const r=await fetch("/api/gladia-transcribe",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(!d.id)throw new Error("Transcription Gladia échouée : "+JSON.stringify(d));return {id:d.id,result_url:d.result_url};
 }
-function pollTranscript(id,result_url,key){
-  return new Promise((res,rej)=>{const go=async()=>{try{const r=await fetch(result_url,{headers:{"x-gladia-key":key}});const d=await r.json();if(d.status==="done")res(d);else if(d.status==="error")rej(new Error(d.result?.error||"Erreur Gladia"));else setTimeout(go,3500);}catch(e){rej(e);}};go();});
+function pollTranscript(result_url){
+  return new Promise((res,rej)=>{const go=async()=>{try{const r=await fetch("/api/gladia-poll",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({result_url})});const d=await r.json();if(d.status==="done")res(d);else if(d.status==="error")rej(new Error(d.result?.error||"Erreur Gladia"));else setTimeout(go,3500);}catch(e){rej(e);}};go();});
 }
 // Normalize Gladia utterances → structured array with timestamps + confidence
 function formatTranscriptStructured(data){
@@ -242,9 +242,9 @@ function analyzeAcousticReliability(utterances){
   });
 }
 // Textual reliability via Claude
-async function analyzeTextualReliability(utterances,claudeKey){
+async function analyzeTextualReliability(utterances){
   const tx=utterances.map((u,i)=>`[${i}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:`Tu es expert en transcription médicale. Analyse cette transcription de consultation diététique. Identifie les passages textuellement incohérents ou suspects.\nRéponds UNIQUEMENT en JSON valide, format exact : {"flags":[{"index":N,"level":"warning"|"error","reason":"explication courte en français"}]}\n- "error" : valeur médicale impossible (glycémie 0.4, IMC 85...), terme médical clairement déformé, phrase brisée\n- "warning" : valeur atypique, attribution de locuteur suspecte, terme ambigu\nSi aucune incohérence : {"flags":[]}`,messages:[{role:"user",content:`Transcription :\n${tx}`}]})});
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,system:`Tu es expert en transcription médicale. Analyse cette transcription de consultation diététique. Identifie les passages textuellement incohérents ou suspects.\nRéponds UNIQUEMENT en JSON valide, format exact : {"flags":[{"index":N,"level":"warning"|"error","reason":"explication courte en français"}]}\n- "error" : valeur médicale impossible (glycémie 0.4, IMC 85...), terme médical clairement déformé, phrase brisée\n- "warning" : valeur atypique, attribution de locuteur suspecte, terme ambigu\nSi aucune incohérence : {"flags":[]}`,messages:[{role:"user",content:`Transcription :\n${tx}`}]})});
   const d=await r.json();if(d.error)throw new Error(d.error.message);
   try{const clean=d.content[0].text.replace(/```json|```/g,"").trim();return JSON.parse(clean).flags||[];}catch{return [];}
 }
@@ -271,9 +271,9 @@ function exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplNam
   a.download=(patient?patient.replace(/\s+/g,"_"):"CR")+"_transcription_"+ds.replace(/\//g,"-")+".md";a.click();
 }
 // ─── RELECTURE IA ─────────────────────────────────────────────────────────────
-async function reviewCR(cr,utterances,claudeKey){
+async function reviewCR(cr,utterances){
   const tx=utterances.map(u=>`[${fmtMs(u.startMs)}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
 
 Identifie précisément :
 1. Les OMISSIONS : informations importantes dites dans la consultation mais absentes du CR
@@ -294,8 +294,8 @@ Si catégorie vide : tableau vide []. Sois rigoureux mais non sur-interprétatif
   catch{throw new Error("Réponse malformée de Claude");}
 }
 
-async function generateCR(transcript,tpl,patient,claudeKey){
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true","x-api-key":claudeKey,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,system:buildPrompt(tpl,patient),messages:[{role:"user",content:`Transcription :\n\n${transcript}\n\nRédige le compte rendu structuré.`}]})});
+async function generateCR(transcript,tpl,patient){
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:4000,system:buildPrompt(tpl,patient),messages:[{role:"user",content:`Transcription :\n\n${transcript}\n\nRédige le compte rendu structuré.`}]})});
   const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;
 }
 
@@ -424,11 +424,9 @@ function FolderBanner({folderName,onPick}){
 }
 
 // ─── HOME ─────────────────────────────────────────────────────────────────────
-function HomePage({allTpls,tpl,setTpl,patient,setPatient,apiKey,setApiKey,claudeKey,setClaudeKey,folderName,onPickFolder,onStart,onTpls,onHistory,onSettings}){
-  const [showKey,setShowKey]=useState(false);
-  const [showCK,setShowCK]=useState(false);
+function HomePage({allTpls,tpl,setTpl,patient,setPatient,folderName,onPickFolder,onStart,onTpls,onHistory,onSettings}){
   const cats=[...new Set(allTpls.map(t=>t.cat))];
-  const canStart=tpl&&apiKey&&claudeKey;
+  const canStart=!!tpl;
   const nb=loadRecords().length;
   return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
     <Header title="Nouvelle consultation" right={
@@ -448,36 +446,6 @@ function HomePage({allTpls,tpl,setTpl,patient,setPatient,apiKey,setApiKey,claude
 
       {/* FOLDER BANNER */}
       <FolderBanner folderName={folderName} onPick={onPickFolder}/>
-
-      {/* API KEY */}
-      <div style={{borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginTop:10,background:apiKey?"#F0FDF4":"#FFFBEB",border:`1.5px solid ${apiKey?"#86EFAC":"#FCD34D"}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          <div style={{width:9,height:9,borderRadius:"50%",background:apiKey?"#22C55E":"#F59E0B",flexShrink:0}}/>
-          <div><div style={{fontSize:13,fontWeight:600,color:apiKey?"#15803D":"#92400E"}}>{apiKey?"Gladia configuré":"Clé API Gladia requise"}</div><div style={{fontSize:11,color:S.muted}}>Plan gratuit 10h/mois · gladia.io</div></div>
-        </div>
-        <button onClick={()=>setShowKey(!showKey)} style={{fontSize:11,fontWeight:700,padding:"5px 11px",borderRadius:8,border:"none",background:apiKey?"#DCFCE7":"#FEF3C7",color:apiKey?"#15803D":"#92400E",cursor:"pointer",flexShrink:0}}>{apiKey?"Modifier":"Configurer"}</button>
-      </div>
-      {showKey&&<Card style={{marginTop:10}}>
-        <div style={{fontSize:13,fontWeight:600,color:S.text,marginBottom:8}}>Clé API Gladia</div>
-        <FInput type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="Votre clé Gladia…"/>
-        <p style={{fontSize:11,color:S.muted,marginTop:5}}>Stockée localement dans votre navigateur</p>
-        <button onClick={()=>setShowKey(false)} style={{marginTop:10,width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Enregistrer</button>
-      </Card>}
-
-      {/* CLAUDE API KEY */}
-      <div style={{borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginTop:10,background:claudeKey?"#F0FDF4":"#FFFBEB",border:`1.5px solid ${claudeKey?"#86EFAC":"#FCD34D"}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          <div style={{width:9,height:9,borderRadius:"50%",background:claudeKey?"#22C55E":"#F59E0B",flexShrink:0}}/>
-          <div><div style={{fontSize:13,fontWeight:600,color:claudeKey?"#15803D":"#92400E"}}>{claudeKey?"Clé Claude configurée":"Clé API Claude (Anthropic) requise"}</div><div style={{fontSize:11,color:S.muted}}>console.anthropic.com → API Keys</div></div>
-        </div>
-        <button onClick={()=>setShowCK(!showCK)} style={{fontSize:11,fontWeight:700,padding:"5px 11px",borderRadius:8,border:"none",background:claudeKey?"#DCFCE7":"#FEF3C7",color:claudeKey?"#15803D":"#92400E",cursor:"pointer",flexShrink:0}}>{claudeKey?"Modifier":"Configurer"}</button>
-      </div>
-      {showCK&&<Card style={{marginTop:10}}>
-        <div style={{fontSize:13,fontWeight:600,color:S.text,marginBottom:8}}>Clé API Anthropic (Claude)</div>
-        <FInput type="password" value={claudeKey} onChange={e=>setClaudeKey(e.target.value)} placeholder="sk-ant-…"/>
-        <p style={{fontSize:11,color:S.muted,marginTop:5}}>Stockée localement · console.anthropic.com</p>
-        <button onClick={()=>setShowCK(false)} style={{marginTop:10,width:"100%",padding:"12px 0",borderRadius:14,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>Enregistrer</button>
-      </Card>}
 
       {/* PATIENT */}
       <Card style={{marginTop:10}}>
@@ -502,8 +470,8 @@ function HomePage({allTpls,tpl,setTpl,patient,setPatient,apiKey,setApiKey,claude
 
       <button onClick={onStart} disabled={!canStart} style={{width:"100%",padding:"15px 0",borderRadius:18,border:"none",background:canStart?S.navy:S.light,color:canStart?"#fff":S.muted,fontWeight:700,fontSize:16,cursor:canStart?"pointer":"not-allowed",marginTop:4}}>🎙️ Démarrer la consultation</button>
       {!tpl&&<p style={{textAlign:"center",fontSize:13,color:S.muted,marginTop:7}}>Sélectionnez un type de consultation</p>}
-      {tpl&&!apiKey&&<p style={{textAlign:"center",fontSize:13,color:"#D97706",marginTop:7}}>⚠️ Configurez votre clé Gladia</p>}
-      {tpl&&apiKey&&!claudeKey&&<p style={{textAlign:"center",fontSize:13,color:"#D97706",marginTop:7}}>⚠️ Configurez votre clé Claude (Anthropic)</p>}
+      
+      
     </div>
   </div>;
 }
@@ -666,7 +634,7 @@ function ProcPage({log,err,onBack,onRetry}){
 }
 
 // ─── TRANSCRIPT VIEWER ────────────────────────────────────────────────────────
-function TranscriptViewer({utterances,claudeKey,patient,tplName,date}){
+function TranscriptViewer({utterances,patient,tplName,date}){
   const [acousticFlags,setAcousticFlags]=useState(null);
   const [textualFlags,setTextualFlags]=useState(null);
   const [loadingTx,setLoadingTx]=useState(false);
@@ -676,7 +644,7 @@ function TranscriptViewer({utterances,claudeKey,patient,tplName,date}){
   const runAcoustic=()=>setAcousticFlags(analyzeAcousticReliability(utterances));
   const runTextual=async()=>{
     setLoadingTx(true);setTxErr(null);
-    try{const flags=await analyzeTextualReliability(utterances,claudeKey);setTextualFlags(flags);}
+    try{const flags=await analyzeTextualReliability(utterances);setTextualFlags(flags);}
     catch(e){setTxErr(e.message);}
     setLoadingTx(false);
   };
@@ -698,7 +666,7 @@ function TranscriptViewer({utterances,claudeKey,patient,tplName,date}){
       <button onClick={runAcoustic} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${acousticFlags?"#86EFAC":S.border}`,background:acousticFlags?"#F0FDF4":S.white,color:acousticFlags?"#15803D":S.text,fontWeight:600,fontSize:12,cursor:"pointer"}}>
         📊 {acousticFlags?"Acoustique ✓":"Analyse acoustique"}
       </button>
-      <button onClick={runTextual} disabled={loadingTx||!claudeKey} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${textualFlags?"#86EFAC":S.border}`,background:textualFlags?"#F0FDF4":S.white,color:textualFlags?"#15803D":!claudeKey?"#CBD5E1":S.text,fontWeight:600,fontSize:12,cursor:claudeKey&&!loadingTx?"pointer":"not-allowed"}}>
+      <button onClick={runTextual} disabled={loadingTx} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${textualFlags?"#86EFAC":S.border}`,background:textualFlags?"#F0FDF4":S.white,color:textualFlags?"#15803D":S.text,fontWeight:600,fontSize:12,cursor:loadingTx?"not-allowed":"pointer"}}>
         {loadingTx?"⏳ Analyse…":textualFlags?"🧠 Textuel ✓":"🧠 Analyse textuelle (IA)"}
       </button>
       <button onClick={()=>exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplName,date)} style={{padding:"7px 11px",borderRadius:10,border:`1.5px solid ${S.teal}`,background:"transparent",color:S.teal,fontWeight:600,fontSize:12,cursor:"pointer"}}>
@@ -942,7 +910,7 @@ function ReviewPanel({review,cr,onApply,onClose}){
   </>;
 }
 
-function EditPage({cr,setCr,utterances,claudeKey,patient,tpl,onExport,onBack}){
+function EditPage({cr,setCr,utterances,patient,tpl,onExport,onBack}){
   const [tab,setTab]=useState("cr");
   const [f,setF]=useState(false);
   const [reviewing,setReviewing]=useState(false);
@@ -951,9 +919,9 @@ function EditPage({cr,setCr,utterances,claudeKey,patient,tpl,onExport,onBack}){
   const [showReview,setShowReview]=useState(false);
 
   const runReview=async()=>{
-    if(!claudeKey||!cr.trim()||!utterances.length)return;
+    if(!cr.trim()||!utterances.length)return;
     setReviewing(true);setReviewErr(null);
-    try{const r=await reviewCR(cr,utterances,claudeKey);setReviewResult(r);setShowReview(true);}
+    try{const r=await reviewCR(cr,utterances);setReviewResult(r);setShowReview(true);}
     catch(e){setReviewErr(e.message);}
     setReviewing(false);
   };
@@ -975,7 +943,7 @@ function EditPage({cr,setCr,utterances,claudeKey,patient,tpl,onExport,onBack}){
           {reviewResult&&<button onClick={()=>setShowReview(true)} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:9,border:`1.5px solid ${hasIssues?"#FECACA":"#86EFAC"}`,background:hasIssues?"#FEF2F2":"#F0FDF4",color:hasIssues?"#DC2626":"#15803D",fontWeight:700,fontSize:11,cursor:"pointer"}}>
             {hasIssues?`⚠️ ${(reviewResult.omissions?.length||0)+(reviewResult.contradictions?.length||0)} problème(s)`:"✅ Relu"} — voir
           </button>}
-          <button onClick={runReview} disabled={reviewing||!claudeKey||!utterances.length} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,border:`1.5px solid ${S.teal}`,background:reviewing?"#F8FAFC":S.white,color:reviewing?S.muted:S.teal,fontWeight:700,fontSize:12,cursor:(!claudeKey||!utterances.length||reviewing)?"not-allowed":"pointer",opacity:(!claudeKey||!utterances.length)?0.5:1}}>
+          <button onClick={runReview} disabled={reviewing||!utterances.length} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:9,border:`1.5px solid ${S.teal}`,background:reviewing?"#F8FAFC":S.white,color:reviewing?S.muted:S.teal,fontWeight:700,fontSize:12,cursor:(!utterances.length||reviewing)?"not-allowed":"pointer",opacity:!utterances.length?0.5:1}}>
             {reviewing?<><span className="spin" style={{fontSize:12}}>⚙️</span> Relecture…</>:"🔍 Relecture IA"}
           </button>
         </div>
@@ -993,7 +961,7 @@ function EditPage({cr,setCr,utterances,claudeKey,patient,tpl,onExport,onBack}){
       </div>
     </>}
     {tab==="transcript"&&<div style={{flex:1,overflowY:"auto",paddingBottom:20}}>
-      <TranscriptViewer utterances={utterances} claudeKey={claudeKey} patient={patient} tplName={tpl?.name||""} date={new Date().toISOString()}/>
+      <TranscriptViewer utterances={utterances} patient={patient} tplName={tpl?.name||""} date={new Date().toISOString()}/>
     </div>}
     {/* Modal relecture */}
     {showReview&&reviewResult&&<ReviewPanel review={reviewResult} cr={cr} onApply={setCr} onClose={()=>setShowReview(false)}/>}
@@ -1091,7 +1059,7 @@ function HistoryPage({onBack,onOpenRecord}){
 }
 
 // ─── RECORD DETAIL ────────────────────────────────────────────────────────────
-function RecordDetail({record,claudeKey,onBack}){
+function RecordDetail({record,onBack}){
   const [cr,setCr]=useState(record.cr);
   const [edited,setEdited]=useState(false);
   const [saved,setSaved]=useState(false);
@@ -1123,7 +1091,7 @@ function RecordDetail({record,claudeKey,onBack}){
     </>}
     {tab==="transcript"&&<div style={{flex:1,overflowY:"auto",paddingBottom:20}}>
       {record.utterances?.length
-        ? <TranscriptViewer utterances={record.utterances} claudeKey={claudeKey} patient={record.patient} tplName={record.tplName} date={record.date}/>
+        ? <TranscriptViewer utterances={record.utterances} patient={record.patient} tplName={record.tplName} date={record.date}/>
         : <div style={{padding:24,textAlign:"center",color:S.muted,fontSize:13}}>Transcription non disponible pour ce CR (généré avant la v5)</div>}
     </div>}
   </div>;
@@ -1166,8 +1134,6 @@ function TplsPage({allTpls,onSave,onBack}){
 // ─── APP ──────────────────────────────────────────────────────────────────────
 function App(){
   const [page,setPage]=useState("home");
-  const [apiKey,setApiKey]=useState(()=>{try{return localStorage.getItem(AK)||"";}catch{return "";}});
-  const [claudeKey,setClaudeKey]=useState(()=>{try{return localStorage.getItem(CK)||"";}catch{return "";}});
   const [allTpls,setAllTpls]=useState(()=>{try{const s=localStorage.getItem(TK);return s?[...TEMPLATES,...JSON.parse(s)]:[...TEMPLATES];}catch{return[...TEMPLATES];}});
   const [tpl,setTpl]=useState(null);
   const [patient,setPatient]=useState("");
@@ -1189,8 +1155,6 @@ function App(){
 
   const mrRef=useRef(null),streamRef=useRef(null),timerRef=useRef(null),analyserRef=useRef(null),animRef=useRef(null),ctxRef=useRef(null),recTimeRef=useRef(0);
 
-  useEffect(()=>{try{if(apiKey)localStorage.setItem(AK,apiKey);}catch{}},[apiKey]);
-  useEffect(()=>{try{if(claudeKey)localStorage.setItem(CK,claudeKey);}catch{}},[claudeKey]);
   useEffect(()=>{try{localStorage.setItem(PK,String(piiRedaction));}catch{}},[piiRedaction]);
   const saveCustom=tpls=>{try{localStorage.setItem(TK,JSON.stringify(tpls.filter(t=>t.custom)));}catch{}setAllTpls(tpls);};
 
@@ -1227,22 +1191,22 @@ function App(){
     setAudioLv(0);
   };
   const process=async()=>{
-    if(!audioBlob||!apiKey)return;
+    if(!audioBlob)return;
     setPage("processing");setPLog([]);setPErr(null);
     const log=(m,s="prog")=>setPLog(p=>[...p,{m,s,t:new Date().toLocaleTimeString("fr-FR")}]);
     try{
       log("Envoi de l'audio vers Gladia…");
-      const url=await uploadAudio(audioBlob,apiKey);log("Audio envoyé ✓","done");
+      const url=await uploadAudio(audioBlob);log("Audio envoyé ✓","done");
       log("Transcription avec identification des locuteurs…");
-      const {id,result_url}=await submitTranscription(url,apiKey,piiRedaction);
+      const {id,result_url}=await submitTranscription(url,piiRedaction);
       log("Transcription en cours…");
-      const res=await pollTranscript(id,result_url,apiKey);
+      const res=await pollTranscript(result_url);
       const utts=formatTranscriptStructured(res);
       setUtterances(utts);
       const tx=utterancesToPlain(utts,res.result?.transcription?.full_transcript||"");setRawTx(tx);
       log(`Transcription terminée — ${utts.length} répliques ✓`,"done");
       log("Génération du compte rendu avec Claude…");
-      const result=await generateCR(tx,tpl,patient,claudeKey);setCr(result);
+      const result=await generateCR(tx,tpl,patient);setCr(result);
       log("Compte rendu généré ✓","done");
       setTimeout(()=>setPage("editing"),1200);
     }catch(e){const msg=e.message||"Erreur inconnue";log("Erreur : "+msg,"err");setPErr(msg);}
@@ -1269,13 +1233,13 @@ function App(){
   };
 
   return <div>
-    {page==="home"       && <HomePage allTpls={allTpls} tpl={tpl} setTpl={setTpl} patient={patient} setPatient={setPatient} apiKey={apiKey} setApiKey={setApiKey} claudeKey={claudeKey} setClaudeKey={setClaudeKey} folderName={folderName} onPickFolder={handlePickFolder} onStart={()=>setPage("recording")} onTpls={()=>setPage("templates")} onHistory={()=>setPage("history")} onSettings={()=>setPage("settings")}/>}
+    {page==="home"       && <HomePage allTpls={allTpls} tpl={tpl} setTpl={setTpl} patient={patient} setPatient={setPatient} folderName={folderName} onPickFolder={handlePickFolder} onStart={()=>setPage("recording")} onTpls={()=>setPage("templates")} onHistory={()=>setPage("history")} onSettings={()=>setPage("settings")}/>}
     {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} onStart={startRec} onStop={stopRec} onProcess={process} onBack={()=>setPage("home")}/>}
     {page==="processing" && <ProcPage log={pLog} err={pErr} onBack={reset} onRetry={process}/>}
-    {page==="editing"    && <EditPage cr={cr} setCr={setCr} utterances={utterances} claudeKey={claudeKey} patient={patient} tpl={tpl} onExport={handleSaveExport} onBack={reset}/>}
+    {page==="editing"    && <EditPage cr={cr} setCr={setCr} utterances={utterances} patient={patient} tpl={tpl} onExport={handleSaveExport} onBack={reset}/>}
     {page==="export"     && <ExportPage cr={cr} patient={patient} dateIso={savedRec?.date||new Date().toISOString()} tplName={tpl?.name||""} savedFileName={savedFileName} onBack={()=>setPage("editing")} onHome={reset}/>}
     {page==="history"    && <HistoryPage onBack={()=>setPage("home")} onOpenRecord={r=>{setCurrentRec(r);setPage("record");}}/>}
-    {page==="record"     && currentRec && <RecordDetail record={currentRec} claudeKey={claudeKey} onBack={()=>setPage("history")}/>}
+    {page==="record"     && currentRec && <RecordDetail record={currentRec} onBack={()=>setPage("history")}/>}
     {page==="templates"  && <TplsPage allTpls={allTpls} onSave={saveCustom} onBack={()=>setPage("home")}/>}
     {page==="settings"   && <SettingsPage allTpls={allTpls} folderName={folderName} onPickFolder={handlePickFolder} onBack={()=>setPage("home")} onImport={handleImport} piiRedaction={piiRedaction} onTogglePii={v=>setPiiRedaction(v)}/>}
   </div>;
