@@ -274,7 +274,7 @@ function exportTranscriptMD(utterances,acousticFlags,textualFlags,patient,tplNam
 // ─── RELECTURE IA ─────────────────────────────────────────────────────────────
 async function reviewCR(cr,utterances){
   const tx=utterances.map(u=>`[${fmtMs(u.startMs)}] Locuteur ${u.speaker} : ${u.text}`).join("\n");
-  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:2000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
+  const r=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,system:`Tu es un expert en rédaction de comptes rendus médicaux. Tu dois relire un compte rendu diététique et le comparer à la transcription originale de la consultation.
 
 Identifie précisément :
 1. Les OMISSIONS : informations importantes dites dans la consultation mais absentes du CR
