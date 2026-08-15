@@ -154,7 +154,8 @@ ANONYMISATION : si des noms ou prénoms de patients, de proches, de médecins ou
 async function uploadAudio(blob){
   const fd=new FormData();fd.append("audio",blob,"audio.webm");
   const r=await fetch("/api/gladia-upload",{method:"POST",body:fd});
-  const d=await r.json();if(!d.audio_url)throw new Error("Upload Gladia échoué : "+JSON.stringify(d));return d.audio_url;
+  const d=await r.json();if(!d.audio_url)throw new Error("Upload Gladia échoué : "+JSON.stringify(d));
+  return {url:d.audio_url,duration:d.audio_metadata?.audio_duration,size:d.audio_metadata?.size,blobSize:blob.size};
 }
 async function submitTranscription(url,piiRedaction=false){
   // v6 : endpoint pre-recorded (l'ancien /v2/transcription est déprécié depuis 2025)
@@ -1196,7 +1197,9 @@ function App(){
     const log=(m,s="prog")=>setPLog(p=>[...p,{m,s,t:new Date().toLocaleTimeString("fr-FR")}]);
     try{
       log("Envoi de l'audio vers Gladia…");
-      const url=await uploadAudio(audioBlob);log("Audio envoyé ✓","done");
+      const upl=await uploadAudio(audioBlob);
+      log(`Audio envoyé ✓ (fichier local : ${(upl.blobSize/1024).toFixed(0)} Ko · reçu par Gladia : ${upl.size?(upl.size/1024).toFixed(0)+' Ko':'?'} · durée détectée : ${upl.duration?upl.duration.toFixed(1)+'s':'?'})`,"done");
+      const url=upl.url;
       log("Transcription avec identification des locuteurs…");
       const {id,result_url}=await submitTranscription(url,piiRedaction);
       log("Transcription en cours…");
