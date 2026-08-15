@@ -576,9 +576,9 @@ function RecPage({tpl,patient,recording,recTime,audioLv,audioBlob,onStart,onStop
       </Card>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:68,fontWeight:700,lineHeight:1,fontFamily:"monospace",color:recording?S.navy:audioBlob?"#16A34A":"#CBD5E1"}}>{fmtTime(recTime)}</div>
-        <div style={{fontSize:12,color:S.muted,marginTop:3}}>max 30:00</div>
+        <div style={{fontSize:12,color:S.muted,marginTop:3}}>max 45:00</div>
         <div style={{width:180,height:4,borderRadius:999,background:S.light,overflow:"hidden",margin:"9px auto 0"}}>
-          <div style={{height:"100%",borderRadius:999,width:`${Math.min(100,(recTime/1800)*100)}%`,background:recording?S.teal:audioBlob?"#22C55E":S.light,transition:"width 1s linear"}}/>
+          <div style={{height:"100%",borderRadius:999,width:`${Math.min(100,(recTime/2700)*100)}%`,background:recording?S.teal:audioBlob?"#22C55E":S.light,transition:"width 1s linear"}}/>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"flex-end",gap:3,height:72}}>
@@ -1181,7 +1181,7 @@ function App(){
       mr.onstop=()=>{setAudioBlob(new Blob(chunks,{type:mime||"audio/webm"}));setRecording(false);};
       mr.start(1000);
       recTimeRef.current=0;setRecording(true);setAudioBlob(null);setRecTime(0);
-      timerRef.current=setInterval(()=>{recTimeRef.current+=1;setRecTime(recTimeRef.current);if(recTimeRef.current>=1800)stopRec();},1000);
+      timerRef.current=setInterval(()=>{recTimeRef.current+=1;setRecTime(recTimeRef.current);if(recTimeRef.current>=2700)stopRec();},1000);
     }catch(e){alert("Microphone inaccessible : "+e.message);}
   };
   const stopRec=()=>{
