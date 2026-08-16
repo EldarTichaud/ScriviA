@@ -560,21 +560,21 @@ function SettingsPage({allTpls,folderName,onPickFolder,onBack,onImport,piiRedact
 }
 
 // ─── RECORDING ────────────────────────────────────────────────────────────────
-function RecPage({tpl,patient,recording,recTime,audioLv,audioBlob,micTest,onTestMic,onStart,onStop,onProcess,onBack}){
+function RecPage({tpl,patient,recording,isPaused,recTime,audioLv,audioBlob,micTest,onTestMic,onStart,onStop,onPause,onResume,onProcess,onBack}){
   const [bars,setBars]=useState(Array(28).fill(6));
   const [lowSignal,setLowSignal]=useState(false);
   const lowStreakRef=useRef(0);
   useEffect(()=>{
-    if(!recording&&micTest!=="testing"){setBars(Array(28).fill(6));setLowSignal(false);lowStreakRef.current=0;return;}
+    if((!recording||isPaused)&&micTest!=="testing"){if(!recording)setBars(Array(28).fill(6));setLowSignal(false);lowStreakRef.current=0;return;}
     const id=setInterval(()=>{
       setBars(prev=>prev.map((_,i)=>{const base=Math.max(0,1-Math.abs(i-13.5)/14);return Math.max(4,base*audioLv*0.85+Math.random()*10+5);}));
-      if(recording){
+      if(recording&&!isPaused){
         if(audioLv<9){lowStreakRef.current+=1;}else{lowStreakRef.current=0;}
         setLowSignal(lowStreakRef.current>50);
       }
     },80);
     return()=>clearInterval(id);
-  },[recording,micTest,audioLv]);
+  },[recording,isPaused,micTest,audioLv]);
   return <div style={{minHeight:"100vh",background:S.bg,display:"flex",flexDirection:"column"}}>
     <Header title="Enregistrement" onBack={onBack} sub={tpl?.name+(patient?" — "+patient:"")}/>
     <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px",gap:26}}>
@@ -592,11 +592,11 @@ function RecPage({tpl,patient,recording,recTime,audioLv,audioBlob,micTest,onTest
       <div style={{display:"flex",alignItems:"flex-end",gap:3,height:72}}>
         {bars.map((h,i)=><div key={i} style={{width:6,height:Math.max(4,Math.min(68,h)),borderRadius:999,background:recording?S.teal:micTest==="testing"?S.teal:audioBlob?"#22C55E":"#CBD5E1",transition:"height 0.07s ease"}}/>)}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:600,color:recording?"#EF4444":audioBlob?"#16A34A":S.muted}}>
-        {recording&&<span className="pulse">●</span>}
-        {recording?"Enregistrement en cours…":audioBlob?"✓ Terminé":"Appuyez pour démarrer"}
+      <div style={{display:"flex",alignItems:"center",gap:8,fontSize:14,fontWeight:600,color:isPaused?"#D97706":recording?"#EF4444":audioBlob?"#16A34A":S.muted}}>
+        {recording&&!isPaused&&<span className="pulse">●</span>}
+        {isPaused?"⏸ En pause":recording?"Enregistrement en cours…":audioBlob?"✓ Terminé":"Appuyez pour démarrer"}
       </div>
-      {recording&&lowSignal&&<div style={{display:"flex",alignItems:"center",gap:8,background:"#FEF3C7",border:"1.5px solid #FCD34D",borderRadius:12,padding:"9px 14px",maxWidth:310}}>
+      {recording&&!isPaused&&lowSignal&&<div style={{display:"flex",alignItems:"center",gap:8,background:"#FEF3C7",border:"1.5px solid #FCD34D",borderRadius:12,padding:"9px 14px",maxWidth:310}}>
         <span style={{fontSize:18}}>🔇</span>
         <span style={{fontSize:12,color:"#92400E",fontWeight:600}}>Son faible détecté — rapprochez-vous du micro ou parlez plus fort</span>
       </div>}
@@ -607,7 +607,11 @@ function RecPage({tpl,patient,recording,recTime,audioLv,audioBlob,micTest,onTest
           </button>
           <button onClick={onStart} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:"#EF4444",color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>🎙️ Démarrer</button>
         </>}
-        {recording&&<button onClick={onStop} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:"#111827",color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>⏹ Arrêter</button>}
+        {recording&&<div style={{display:"flex",gap:9}}>
+          {!isPaused?<button onClick={onPause} style={{flex:1,padding:"14px 0",borderRadius:16,border:`2px solid ${S.border}`,background:S.white,color:S.text,fontWeight:700,fontSize:16,cursor:"pointer"}}>⏸ Pause</button>
+                    :<button onClick={onResume} style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",background:S.teal,color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>▶ Reprendre</button>}
+          <button onClick={onStop} style={{flex:1,padding:"14px 0",borderRadius:16,border:"none",background:"#111827",color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>⏹ Arrêter</button>
+        </div>}
         {audioBlob&&!recording&&<>
           <button onClick={onProcess} style={{width:"100%",padding:"14px 0",borderRadius:16,border:"none",background:S.navy,color:"#fff",fontWeight:700,fontSize:16,cursor:"pointer"}}>⚡ Générer le compte rendu</button>
           <button onClick={onStart} style={{width:"100%",padding:"12px 0",borderRadius:16,border:`2px solid ${S.border}`,background:S.white,color:S.muted,fontWeight:600,fontSize:15,cursor:"pointer"}}>🔄 Recommencer</button>
@@ -1159,6 +1163,7 @@ function App(){
   const [piiRedaction,setPiiRedaction]=useState(()=>{try{return localStorage.getItem(PK)==="true";}catch{return false;}});
 
   const [recording,setRecording]=useState(false);
+  const [isPaused,setIsPaused]=useState(false);
   const [recTime,setRecTime]=useState(0);
   const [audioBlob,setAudioBlob]=useState(null);
   const [audioLv,setAudioLv]=useState(0);
@@ -1217,16 +1222,34 @@ function App(){
       mr.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
       mr.onstop=()=>{setAudioBlob(new Blob(chunks,{type:mime||"audio/webm"}));setRecording(false);};
       mr.start(1000);
-      recTimeRef.current=0;setRecording(true);setAudioBlob(null);setRecTime(0);
+      recTimeRef.current=0;setRecording(true);setIsPaused(false);setAudioBlob(null);setRecTime(0);
       timerRef.current=setInterval(()=>{recTimeRef.current+=1;setRecTime(recTimeRef.current);if(recTimeRef.current>=2700)stopRec();},1000);
     }catch(e){alert("Microphone inaccessible : "+e.message);}
+  };
+  const pauseRec=()=>{
+    if(mrRef.current&&mrRef.current.state==="recording"){
+      mrRef.current.pause();
+      clearInterval(timerRef.current);
+      cancelAnimationFrame(animRef.current);
+      setAudioLv(0);
+      setIsPaused(true);
+    }
+  };
+  const resumeRec=()=>{
+    if(mrRef.current&&mrRef.current.state==="paused"){
+      mrRef.current.resume();
+      const an=analyserRef.current;
+      const tick=()=>{if(!analyserRef.current)return;const d=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(d);setAudioLv(d.reduce((a,b)=>a+b,0)/d.length);animRef.current=requestAnimationFrame(tick);};tick();
+      timerRef.current=setInterval(()=>{recTimeRef.current+=1;setRecTime(recTimeRef.current);if(recTimeRef.current>=2700)stopRec();},1000);
+      setIsPaused(false);
+    }
   };
   const stopRec=()=>{
     clearInterval(timerRef.current);cancelAnimationFrame(animRef.current);analyserRef.current=null;
     if(ctxRef.current){ctxRef.current.close();ctxRef.current=null;}
     streamRef.current&&streamRef.current.getTracks().forEach(t=>t.stop());
     if(mrRef.current&&mrRef.current.state!=="inactive")mrRef.current.stop();
-    setAudioLv(0);
+    setAudioLv(0);setIsPaused(false);
   };
   const process=async()=>{
     if(!audioBlob)return;
@@ -1274,7 +1297,7 @@ function App(){
 
   return <div>
     {page==="home"       && <HomePage allTpls={allTpls} tpl={tpl} setTpl={setTpl} patient={patient} setPatient={setPatient} folderName={folderName} onPickFolder={handlePickFolder} onStart={()=>setPage("recording")} onTpls={()=>setPage("templates")} onHistory={()=>setPage("history")} onSettings={()=>setPage("settings")}/>}
-    {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} micTest={micTest} onTestMic={testMic} onStart={startRec} onStop={stopRec} onProcess={process} onBack={()=>setPage("home")}/>}
+    {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} isPaused={isPaused} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} micTest={micTest} onTestMic={testMic} onStart={startRec} onStop={stopRec} onPause={pauseRec} onResume={resumeRec} onProcess={process} onBack={()=>setPage("home")}/>}
     {page==="processing" && <ProcPage log={pLog} err={pErr} onBack={reset} onRetry={process}/>}
     {page==="editing"    && <EditPage cr={cr} setCr={setCr} utterances={utterances} patient={patient} tpl={tpl} onExport={handleSaveExport} onBack={reset}/>}
     {page==="export"     && <ExportPage cr={cr} patient={patient} dateIso={savedRec?.date||new Date().toISOString()} tplName={tpl?.name||""} savedFileName={savedFileName} onBack={()=>setPage("editing")} onHome={reset}/>}
