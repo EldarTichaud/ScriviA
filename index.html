@@ -85,7 +85,7 @@ const TEMPLATES = [
 ];
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
-const RK="dietocr_records", TK="dietocr_custom_tpls", AK="gladia_key", CK="claude_key", FK="dietocr_folder_name", PK="dietocr_pii_redaction";
+const RK="dietocr_records", TK="dietocr_custom_tpls", AK="gladia_key", CK="claude_key", FK="dietocr_folder_name", PK="dietocr_pii_redaction", BK="dietocr_bitrate";
 const loadRecords=()=>{try{return JSON.parse(localStorage.getItem(RK)||"[]");}catch{return[];}};
 const saveRecords=r=>{try{localStorage.setItem(RK,JSON.stringify(r));}catch{}};
 const addRecord=rec=>{const r=loadRecords();r.unshift(rec);saveRecords(r);};
@@ -560,7 +560,7 @@ function SettingsPage({allTpls,folderName,onPickFolder,onBack,onImport,piiRedact
 }
 
 // ─── RECORDING ────────────────────────────────────────────────────────────────
-function RecPage({tpl,patient,recording,isPaused,recTime,audioLv,audioBlob,micTest,onTestMic,onStart,onStop,onPause,onResume,onProcess,onBack}){
+function RecPage({tpl,patient,recording,isPaused,recTime,audioLv,audioBlob,micTest,onTestMic,bitrate,setBitrate,onStart,onStop,onPause,onResume,onProcess,onBack}){
   const [bars,setBars]=useState(Array(28).fill(6));
   const [lowSignal,setLowSignal]=useState(false);
   const lowStreakRef=useRef(0);
@@ -584,7 +584,7 @@ function RecPage({tpl,patient,recording,isPaused,recTime,audioLv,audioBlob,micTe
       </Card>
       <div style={{textAlign:"center"}}>
         <div style={{fontSize:68,fontWeight:700,lineHeight:1,fontFamily:"monospace",color:recording?S.navy:audioBlob?"#16A34A":"#CBD5E1"}}>{fmtTime(recTime)}</div>
-        <div style={{fontSize:12,color:S.muted,marginTop:3}}>max 45:00</div>
+        <div style={{fontSize:12,color:S.muted,marginTop:3}}>max 45:00{recording?` · ${bitrate/1000}kbps`:""}</div>
         <div style={{width:180,height:4,borderRadius:999,background:S.light,overflow:"hidden",margin:"9px auto 0"}}>
           <div style={{height:"100%",borderRadius:999,width:`${Math.min(100,(recTime/2700)*100)}%`,background:recording?S.teal:audioBlob?"#22C55E":S.light,transition:"width 1s linear"}}/>
         </div>
@@ -602,6 +602,13 @@ function RecPage({tpl,patient,recording,isPaused,recTime,audioLv,audioBlob,micTe
       </div>}
       <div style={{width:"100%",maxWidth:290,display:"flex",flexDirection:"column",gap:11}}>
         {!recording&&!audioBlob&&<>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 12px",borderRadius:12,border:`1.5px solid ${S.border}`,background:S.white}}>
+            <span style={{fontSize:12,fontWeight:600,color:S.muted}}>🎚️ Qualité audio</span>
+            <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>setBitrate(32000)} style={{padding:"5px 10px",borderRadius:8,border:"none",background:bitrate===32000?S.navy:S.light,color:bitrate===32000?"#fff":S.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>32k</button>
+              <button onClick={()=>setBitrate(128000)} style={{padding:"5px 10px",borderRadius:8,border:"none",background:bitrate===128000?S.navy:S.light,color:bitrate===128000?"#fff":S.muted,fontWeight:700,fontSize:12,cursor:"pointer"}}>128k</button>
+            </div>
+          </div>
           <button onClick={onTestMic} disabled={micTest==="testing"} style={{width:"100%",padding:"11px 0",borderRadius:14,border:`1.5px solid ${micTest==="ok"?"#86EFAC":micTest==="low"?"#FCD34D":S.border}`,background:micTest==="ok"?"#F0FDF4":micTest==="low"?"#FFFBEB":S.white,color:micTest==="ok"?"#15803D":micTest==="low"?"#92400E":S.text,fontWeight:600,fontSize:14,cursor:micTest==="testing"?"not-allowed":"pointer"}}>
             {micTest==="testing"?"🎙️ Test en cours… parlez normalement":micTest==="ok"?"✓ Micro OK — retester ?":micTest==="low"?"⚠️ Son faible — retester ?":"🎚️ Tester le micro (5s)"}
           </button>
@@ -1161,6 +1168,8 @@ function App(){
   const [patient,setPatient]=useState("");
   const [folderName,setFolderName]=useState(()=>{try{return localStorage.getItem(FK)||"";}catch{return "";}});
   const [piiRedaction,setPiiRedaction]=useState(()=>{try{return localStorage.getItem(PK)==="true";}catch{return false;}});
+  const [bitrate,setBitrate]=useState(()=>{try{return parseInt(localStorage.getItem(BK))||128000;}catch{return 128000;}});
+  useEffect(()=>{try{localStorage.setItem(BK,String(bitrate));}catch{}},[bitrate]);
 
   const [recording,setRecording]=useState(false);
   const [isPaused,setIsPaused]=useState(false);
@@ -1217,7 +1226,7 @@ function App(){
       const an=ctx.createAnalyser();an.fftSize=256;src.connect(an);analyserRef.current=an;
       const tick=()=>{if(!analyserRef.current)return;const d=new Uint8Array(an.frequencyBinCount);an.getByteFrequencyData(d);setAudioLv(d.reduce((a,b)=>a+b,0)/d.length);animRef.current=requestAnimationFrame(tick);};tick();
       const mime=["audio/webm","audio/ogg","audio/mp4",""].find(m=>!m||MediaRecorder.isTypeSupported(m));
-      const mr=new MediaRecorder(stream,mime?{mimeType:mime}:{});mrRef.current=mr;
+      const mr=new MediaRecorder(stream,mime?{mimeType:mime,audioBitsPerSecond:bitrate}:{audioBitsPerSecond:bitrate});mrRef.current=mr;
       const chunks=[];
       mr.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
       mr.onstop=()=>{setAudioBlob(new Blob(chunks,{type:mime||"audio/webm"}));setRecording(false);};
@@ -1297,7 +1306,7 @@ function App(){
 
   return <div>
     {page==="home"       && <HomePage allTpls={allTpls} tpl={tpl} setTpl={setTpl} patient={patient} setPatient={setPatient} folderName={folderName} onPickFolder={handlePickFolder} onStart={()=>setPage("recording")} onTpls={()=>setPage("templates")} onHistory={()=>setPage("history")} onSettings={()=>setPage("settings")}/>}
-    {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} isPaused={isPaused} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} micTest={micTest} onTestMic={testMic} onStart={startRec} onStop={stopRec} onPause={pauseRec} onResume={resumeRec} onProcess={process} onBack={()=>setPage("home")}/>}
+    {page==="recording"  && <RecPage tpl={tpl} patient={patient} recording={recording} isPaused={isPaused} recTime={recTime} audioLv={audioLv} audioBlob={audioBlob} micTest={micTest} onTestMic={testMic} bitrate={bitrate} setBitrate={setBitrate} onStart={startRec} onStop={stopRec} onPause={pauseRec} onResume={resumeRec} onProcess={process} onBack={()=>setPage("home")}/>}
     {page==="processing" && <ProcPage log={pLog} err={pErr} onBack={reset} onRetry={process}/>}
     {page==="editing"    && <EditPage cr={cr} setCr={setCr} utterances={utterances} patient={patient} tpl={tpl} onExport={handleSaveExport} onBack={reset}/>}
     {page==="export"     && <ExportPage cr={cr} patient={patient} dateIso={savedRec?.date||new Date().toISOString()} tplName={tpl?.name||""} savedFileName={savedFileName} onBack={()=>setPage("editing")} onHome={reset}/>}
